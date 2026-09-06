@@ -93,8 +93,32 @@
   .kid-badge.petya{background:var(--petya);}
   .kid-badge.fedya{background:var(--fedya);}
 
+  .banners-row{display:flex;gap:14px;align-items:stretch;margin-bottom:14px;}
+  .banners-row .olympiad-banner, .banners-row .reminder-banner{flex:1;min-width:0;margin-bottom:0;}
   .olympiad-banner{background:var(--gold-soft);border:1px solid var(--gold);color:#7a5613;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13.5px;display:flex;flex-direction:column;gap:4px;}
   .olympiad-banner .ob-row{display:flex;gap:8px;align-items:center;}
+  .reminder-banner{background:#fdece4;border:1px solid #e08a5e;color:#8a3f14;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13.5px;display:flex;flex-direction:column;gap:4px;}
+  .reminder-banner .rb-row{display:flex;gap:8px;align-items:center;}
+  .warn-banner{background:#fff3cd;border:1px solid #e0c46c;color:#6b5215;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+
+  /* homework file attachments */
+  .m-files-list{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;}
+  .m-file-chip{display:flex;align-items:center;gap:5px;background:#f3f3ec;border:1px solid var(--paper-line);border-radius:6px;padding:3px 6px;font-size:11px;max-width:170px;}
+  .m-file-chip img{width:20px;height:20px;object-fit:cover;border-radius:3px;flex:none;}
+  .m-file-chip .m-file-icon{font-size:14px;}
+  .m-file-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;}
+  .m-file-del{border:none;background:none;cursor:pointer;color:#a33;font-size:12px;padding:0;line-height:1;}
+  .m-file-attach-label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;color:var(--ink);background:#fff;border:1px solid var(--paper-line);border-radius:7px;padding:6px 10px;margin-bottom:8px;}
+
+  /* library tab */
+  .lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:8px;}
+  .lib-card{position:relative;background:var(--card);border:1px solid var(--paper-line);border-radius:8px;padding:8px;box-shadow:var(--shadow);}
+  .lib-preview{display:block;text-decoration:none;color:inherit;}
+  .lib-preview img{width:100%;height:90px;object-fit:cover;border-radius:6px;display:block;}
+  .lib-file-icon{width:100%;height:90px;display:flex;align-items:center;justify-content:center;font-size:32px;background:#f3f3ec;border-radius:6px;}
+  .lib-name{font-size:11.5px;font-weight:600;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lib-sub{font-size:10.5px;color:var(--ink-soft);margin-top:2px;}
+  .lib-card .rdel{position:absolute;top:4px;right:4px;}
 
   .banner{background:var(--warn-soft);color:var(--margin);border:1px dashed var(--margin);border-radius:8px;padding:7px 11px;font-size:13px;margin-bottom:8px;}
   .banner.holiday{background:#eef2e4;color:#5c6b3f;border-color:#8a9a5b;}
@@ -241,6 +265,7 @@
     body::before{left:12px;}
     header.top h1{font-size:21px;}
     .day-table td.time{width:64px;}
+    .banners-row{flex-direction:column;}
   }
 </style>
 </head>
@@ -260,6 +285,7 @@
     {id:'fedya', name:'Федя', initial:'Ф', hex:'#3f7a4c', soft:'#e8f2e9'}
   ];
   const OLYMPIAD_LEAD_DAYS = 14;
+  const REMINDER_LEAD_DAYS = 7;
 
   // ---------- index data ----------
   const lessonsByKidDate = {petya:{}, fedya:{}};
@@ -367,6 +393,12 @@
       .filter(r=>r.type==='olympiad' && ((r.date>=todayStr && daysBetween(todayStr,r.date)<=OLYMPIAD_LEAD_DAYS) || remOccursOn(r,todayStr)))
       .sort((a,b)=>a.date.localeCompare(b.date));
   }
+  function upcomingReminders(){
+    const todayStr = iso(startOfDay(new Date()));
+    return remindersData
+      .filter(r=>r.type!=='olympiad' && ((r.date>=todayStr && daysBetween(todayStr,r.date)<=REMINDER_LEAD_DAYS) || remOccursOn(r,todayStr)))
+      .sort((a,b)=>a.date.localeCompare(b.date));
+  }
   // ---------- calendars / recurring rules ----------
   function calRuleMatchesDate(rule, dateStr){
     if(dateStr < rule.date) return false;
@@ -437,11 +469,15 @@
     return rule.start+(rule.end?'–'+rule.end:'');
   }
 
+  function hwHasContent(hw){
+    return !!(hw && (hw.text || (hw.files && hw.files.length)));
+  }
+
   function dayHasPendingHw(kid, dateStr){
     const lessons = (lessonsByKidDate[kid][dateStr]||[]).concat(customLessonsFor(kid,dateStr));
     return lessons.some(l=>{
       const hw = homeworkData[keyOf(kid,dateStr,l.start)];
-      return hw && hw.text && !hw.done;
+      return hwHasContent(hw) && !hw.done;
     });
   }
 
@@ -464,6 +500,7 @@
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null;
   let storageBackend = sb ? 'supabase' : 'local';
+  const FILES_BUCKET = 'homework-files';
 
   async function loadStorage(){
     try {
@@ -582,6 +619,7 @@
     if(state.tab==='schedule') html += renderScheduleTab();
     else if(state.tab==='calsettings') html += renderCalSettingsTab();
     else if(state.tab==='homework') html += renderHomeworkTab();
+    else if(state.tab==='library') html += renderLibraryTab();
     else html += renderRemindersTab();
     app.innerHTML = html;
     attachHandlers();
@@ -598,7 +636,7 @@
   }
 
   function renderTabs(){
-    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['reminders','Напоминания и олимпиады']];
+    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['library','Библиотека'],['reminders','Напоминания и олимпиады']];
     return `<nav class="tabs">${tabs.map(([id,label])=>
       `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>`;
   }
@@ -632,12 +670,37 @@
     }).join('')}</div>`;
   }
 
+  function reminderBannerHtml(){
+    const list = upcomingReminders();
+    if(list.length===0) return '';
+    const todayStr = iso(startOfDay(new Date()));
+    return `<div class="reminder-banner">${list.map(r=>{
+      const kidLabel = r.kid==='both' ? 'обоим' : (KIDS.find(k=>k.id===r.kid)||{}).name;
+      const ongoing = todayStr>=r.date && todayStr<=(r.dateEnd||r.date);
+      let when;
+      if(ongoing){
+        when = 'идёт';
+      } else {
+        const d = daysBetween(todayStr,r.date);
+        when = d===0?'сегодня':d===1?'завтра':'через '+d+' '+dayWord(d);
+      }
+      return `<div class="rb-row">🚩 <b>${escapeHtml(r.text)}</b> — ${kidLabel}, ${when}</div>`;
+    }).join('')}</div>`;
+  }
+
   function dayWord(n){
     const n10=n%10, n100=n%100;
     if(n100>=11&&n100<=14) return 'дней';
     if(n10===1) return 'день';
     if(n10>=2&&n10<=4) return 'дня';
     return 'дней';
+  }
+
+  function bannersRowHtml(){
+    const ol = olympiadBannerHtml();
+    const rem = reminderBannerHtml();
+    if(ol && rem) return `<div class="banners-row">${ol}${rem}</div>`;
+    return ol || rem;
   }
 
   // ---- schedule tab ----
@@ -659,7 +722,7 @@
     </div>`;
     out += legendHtml();
     out += renderCalToggleRow();
-    out += olympiadBannerHtml();
+    out += bannersRowHtml();
     if(state.view==='day') out += renderDayView();
     else if(state.view==='week') out += renderWeekView();
     else out += renderMonthView();
@@ -725,7 +788,7 @@
     if(!lesson) return `<td class="cell-empty">—</td>`;
     const subj = resolvedSubject(kid, dateStr, lesson.start);
     const hw = homeworkData[keyOf(kid,dateStr,lesson.start)];
-    const flag = hw && hw.text ? (hw.done?'✅':'📝') : '';
+    const flag = hwHasContent(hw) ? (hw.done?'✅':'📝') : '';
     return `<td>
       <div class="cell-lesson ${kid}" data-lesson="${kid}|${dateStr}|${lesson.start}|${lesson.end}">
         <span class="cell-subject">${escapeHtml(subj)}</span>
@@ -739,7 +802,7 @@
     if(calList && calList.length){
       return `<td>${calList.map(o=>{
         const hw = homeworkData[calHwKey(o.calendarId,dateStr,o.start)];
-        const flag = hw && hw.text ? (hw.done?'✅':'📝') : '';
+        const flag = hwHasContent(hw) ? (hw.done?'✅':'📝') : '';
         return `<div class="cell-lesson" style="border-left:3px solid ${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">
           <span class="cell-subject">${escapeHtml(o.subject)}</span>
           ${flag?`<span class="cell-hw">${flag}</span>`:''}
@@ -753,13 +816,13 @@
     if(oldLesson){
       const subj = resolvedSubject(kid, dateStr, oldLesson.start);
       const hw = homeworkData[keyOf(kid,dateStr,oldLesson.start)];
-      const flag = hw && hw.text ? (hw.done?' ✅':' 📝') : '';
+      const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
       return `<span class="wd-cell ${kid}" data-lesson="${kid}|${dateStr}|${oldLesson.start}|${oldLesson.end}">${escapeHtml(subj)}${flag}</span>`;
     }
     if(calList && calList.length){
       const items = calList.map(o=>{
         const hw = homeworkData[calHwKey(o.calendarId,dateStr,o.start)];
-        const flag = hw && hw.text ? (hw.done?' ✅':' 📝') : '';
+        const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
         return `<span class="wd-cell" style="background:${o.color}22;color:${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">${escapeHtml(o.subject)}${flag}</span>`;
       }).join('');
       return calList.length>1 ? `<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">${items}</div>` : items;
@@ -998,7 +1061,8 @@
     if(hwFilterStatus==='pending') filtered = filtered.filter(e=>!e.done);
     if(hwFilterStatus==='done') filtered = filtered.filter(e=>e.done);
 
-    let out = `<div class="filters">
+    let out = migrationBannerHtml();
+    out += `<div class="filters">
       <div class="seg">
         <button data-hwsrc="all" class="${hwFilterSource==='all'?'active':''}">Все</button>
         ${KIDS.map(k=>`<button data-hwsrc="${k.id}" class="${hwFilterSource===k.id?'active':''}">${k.name}</button>`).join('')}
@@ -1036,6 +1100,7 @@
               <span class="hw-subject">${escapeHtml(e.subject)}</span>
             </div>
             <div class="hw-text ${e.done?'done-text':''}">${escapeHtml(e.text)}</div>
+            ${hwFilesPreviewHtml(e.files)}
           </div>
         </div>`;
       }
@@ -1049,27 +1114,40 @@
             <span class="hw-subject">${escapeHtml(e.subject)}</span>
           </div>
           <div class="hw-text ${e.done?'done-text':''}">${escapeHtml(e.text)}</div>
+          ${hwFilesPreviewHtml(e.files)}
         </div>
       </div>`;
     }).join('')}</div>`;
     return out;
   }
 
+  function hwFilesPreviewHtml(files){
+    const valid = (files||[]).filter(f=>!f.uploading && fileUrl(f));
+    if(!valid.length) return '';
+    return `<div class="m-files-list" style="margin-top:6px;" onclick="event.stopPropagation()">${valid.map(f=>{
+      const isImg = f.type && f.type.startsWith('image/');
+      return `<a href="${fileUrl(f)}" download="${escAttr(f.name)}" target="_blank" rel="noopener" class="m-file-chip" style="text-decoration:none;color:inherit;">
+        ${isImg?`<img src="${fileUrl(f)}">`:'<span class="m-file-icon">📄</span>'}
+        <span class="m-file-name">${escapeHtml(f.name)}</span>
+      </a>`;
+    }).join('')}</div>`;
+  }
+
   function collectHomework(){
     let entries = [];
     Object.keys(homeworkData).forEach(key=>{
       const hw = homeworkData[key];
-      if(!hw || !hw.text) return;
+      if(!hwHasContent(hw)) return;
       const parts = key.split('|');
       if(parts[0]==='cal'){
         const [, calendarId, date, start] = parts;
         const cal = calendarsData.find(c=>c.id===calendarId);
         const rule = calRulesData.find(r=>r.calendarId===calendarId && r.start===start && calRuleMatchesDate(r,date));
         const kid = cal ? (cal.kid || 'both') : 'both';
-        entries.push({isCal:true, calendarId, calName: cal?cal.name:'Календарь', kid, date, start, text:hw.text, done:!!hw.done, subject: rule?rule.subject:(hw.subject||'')});
+        entries.push({isCal:true, calendarId, calName: cal?cal.name:'Календарь', kid, date, start, text:hw.text||'', done:!!hw.done, subject: rule?rule.subject:(hw.subject||''), files: hw.files||[]});
       } else {
         const [kid,date,start] = parts;
-        entries.push({kid,date,start,text:hw.text,done:!!hw.done,subject:resolvedSubject(kid,date,start)});
+        entries.push({kid,date,start,text:hw.text||'',done:!!hw.done,subject:resolvedSubject(kid,date,start),files:hw.files||[]});
       }
     });
     return entries;
@@ -1182,6 +1260,242 @@
     return out;
   }
 
+  // ---- library tab (all homework file attachments) ----
+  let libFilterKid = 'all';
+
+  function collectAllFiles(){
+    return collectHomework()
+      .filter(e=> e.files && e.files.length)
+      .flatMap(e=> e.files.filter(f=>!f.uploading && fileUrl(f)).map(f=>({
+        kid: e.kid,
+        calName: e.isCal ? e.calName : null,
+        date: e.date,
+        start: e.start,
+        subject: e.subject || 'Без предмета',
+        key: e.isCal ? calHwKey(e.calendarId,e.date,e.start) : keyOf(e.kid,e.date,e.start),
+        file: f
+      })));
+  }
+
+  function renderLibraryTab(){
+    let files = collectAllFiles();
+    let filtered = libFilterKid==='all' ? files : files.filter(f=> f.kid===libFilterKid || f.kid==='both');
+    filtered.sort((a,b)=> (b.date+b.start).localeCompare(a.date+a.start));
+
+    let out = migrationBannerHtml();
+    out += `<div class="filters"><div class="seg">
+      <button data-libkid="all" class="${libFilterKid==='all'?'active':''}">Все</button>
+      ${KIDS.map(k=>`<button data-libkid="${k.id}" class="${libFilterKid===k.id?'active':''}">${k.name}</button>`).join('')}
+    </div></div>`;
+
+    if(filtered.length===0){
+      out += `<div class="empty-state">Файлов пока нет. Прикрепите файл к домашнему заданию в расписании — он появится здесь.</div>`;
+      return out;
+    }
+
+    const bySubject = {};
+    filtered.forEach(f=>{
+      (bySubject[f.subject] = bySubject[f.subject] || []).push(f);
+    });
+    out += Object.keys(bySubject).sort().map(subj=>{
+      return `<div class="section-title" style="margin-top:18px;">${escapeHtml(subj)}</div>
+      <div class="lib-grid">${bySubject[subj].map(libFileCardHtml).join('')}</div>`;
+    }).join('');
+    return out;
+  }
+
+  function libFileCardHtml(f){
+    const kidLabel = f.kid==='both' ? 'Оба' : ((KIDS.find(k=>k.id===f.kid)||{}).name || '');
+    const [y,m,d] = f.date.split('-');
+    const dateLabel = d+' '+MONTHS_GEN[parseInt(m,10)-1];
+    const isImg = f.file.type && f.file.type.startsWith('image/');
+    const preview = isImg
+      ? `<img src="${fileUrl(f.file)}" alt="${escAttr(f.file.name)}">`
+      : `<div class="lib-file-icon">📄</div>`;
+    return `<div class="lib-card">
+      <a href="${fileUrl(f.file)}" download="${escAttr(f.file.name)}" target="_blank" rel="noopener" class="lib-preview">${preview}</a>
+      <div class="lib-name" title="${escAttr(f.file.name)}">${escapeHtml(f.file.name)}</div>
+      <div class="lib-sub">${escapeHtml(kidLabel)} · ${dateLabel}${f.calName?' · '+escapeHtml(f.calName):''}</div>
+      <button class="rdel" data-libdel="${f.key}|${f.file.id}">✕</button>
+    </div>`;
+  }
+
+  // ---- homework file attachments (Supabase Storage) ----
+  const MAX_FILE_SIZE = 100*1024*1024; // 100MB per file
+  const INLINE_FALLBACK_MAX = 8*1024*1024; // 8MB cap when no Supabase Storage is available
+
+  function fileUrl(f){ return f.url || f.dataUrl || ''; }
+
+  function fileAttachSectionHtml(files){
+    return `<label class="m-label">Файлы к ДЗ</label>
+      <div id="m-files-list" class="m-files-list">${filesListInnerHtml(files)}</div>
+      <label class="m-file-attach-label">📎 Прикрепить файл<input type="file" id="m-file-input" multiple style="display:none;"></label>`;
+  }
+
+  function filesListInnerHtml(files){
+    if(!files || !files.length) return `<div style="font-size:11.5px;color:var(--ink-soft);">Файлов нет</div>`;
+    return files.map(f=>{
+      if(f.uploading){
+        return `<div class="m-file-chip"><span class="m-file-icon">⏳</span><span class="m-file-name">${escapeHtml(f.name)}</span></div>`;
+      }
+      const url = fileUrl(f);
+      const isImg = f.type && f.type.startsWith('image/');
+      const preview = `${isImg?`<img src="${url}">`:`<span class="m-file-icon">📄</span>`}<span class="m-file-name" title="${escAttr(f.name)}">${escapeHtml(f.name)}</span>`;
+      const body = url
+        ? `<a href="${url}" download="${escAttr(f.name)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:5px;min-width:0;">${preview}</a>`
+        : `<span style="display:flex;align-items:center;gap:5px;min-width:0;color:var(--ink-soft);" title="Файл повреждён, удалите и загрузите заново">${preview}</span>`;
+      return `<div class="m-file-chip">
+        ${body}
+        <button type="button" class="m-file-del" data-fid="${f.id}">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  async function uploadFileToStorage(file){
+    if(sb && storageBackend==='supabase'){
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-80);
+      const path = Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+safeName;
+      const {error} = await sb.storage.from(FILES_BUCKET).upload(path, file, {cacheControl:'3600', upsert:false});
+      if(error) throw error;
+      const {data} = sb.storage.from(FILES_BUCKET).getPublicUrl(path);
+      return {id: Date.now()+'-'+Math.random().toString(36).slice(2,7), name:file.name, type:file.type||'', size:file.size, url:data.publicUrl, path, storage:'supabase'};
+    }
+    // no Supabase configured — fall back to embedding small files directly in the saved JSON
+    if(file.size > INLINE_FALLBACK_MAX){
+      throw new Error('Без облачного хранилища можно прикладывать файлы не больше 8 МБ.');
+    }
+    return await new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve({id: Date.now()+'-'+Math.random().toString(36).slice(2,7), name:file.name, type:file.type||'', size:file.size, dataUrl:reader.result, storage:'inline'});
+      reader.onerror = ()=> reject(new Error('Не удалось прочитать файл'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function removeFileFromStorage(f){
+    if(f && f.storage==='supabase' && f.path && sb){
+      sb.storage.from(FILES_BUCKET).remove([f.path]).catch(()=>{});
+    }
+  }
+
+  function dataUrlToBlob(dataUrl){
+    const [header, base64] = dataUrl.split(',');
+    const mimeMatch = header.match(/data:(.*?);base64/);
+    const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+    const binary = atob(base64);
+    const arr = new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) arr[i] = binary.charCodeAt(i);
+    return new Blob([arr], {type: mime});
+  }
+
+  function countInlineFiles(){
+    let n = 0;
+    Object.values(homeworkData).forEach(hw=>{
+      if(hw && hw.files) hw.files.forEach(f=>{ if(f.dataUrl && !f.url) n++; });
+    });
+    return n;
+  }
+
+  async function migrateInlineFilesToCloud(){
+    if(!(sb && storageBackend==='supabase')){
+      alert('Supabase не настроен — перенос недоступен.');
+      return;
+    }
+    const keys = Object.keys(homeworkData).filter(k=> homeworkData[k] && homeworkData[k].files && homeworkData[k].files.some(f=>f.dataUrl && !f.url));
+    if(keys.length===0){ alert('Файлов для переноса не найдено.'); return; }
+    if(!confirm('Перенести файлы ('+keys.length+' запис(ей) с ДЗ) в облачное хранилище? Это ускорит работу приложения. Может занять некоторое время.')) return;
+    let migrated = 0, failed = 0;
+    for(const key of keys){
+      const hw = homeworkData[key];
+      const newFiles = [];
+      for(const f of hw.files){
+        if(f.url || !f.dataUrl){ newFiles.push(f); continue; }
+        try{
+          const blob = dataUrlToBlob(f.dataUrl);
+          const safeName = (f.name||'file').replace(/[^a-zA-Z0-9._-]+/g,'_').slice(-80);
+          const path = Date.now()+'-'+Math.random().toString(36).slice(2,8)+'-'+safeName;
+          const {error} = await sb.storage.from(FILES_BUCKET).upload(path, blob, {cacheControl:'3600', upsert:false, contentType: f.type||undefined});
+          if(error) throw error;
+          const {data} = sb.storage.from(FILES_BUCKET).getPublicUrl(path);
+          newFiles.push({id:f.id, name:f.name, type:f.type||'', size:f.size, url:data.publicUrl, path, storage:'supabase'});
+          migrated++;
+        } catch(err){
+          newFiles.push(f);
+          failed++;
+        }
+      }
+      hw.files = newFiles;
+    }
+    await persistAll();
+    render();
+    alert('Готово. Перенесено файлов: '+migrated+(failed?('. Не удалось перенести: '+failed+' (оставлены как были).'):'.'));
+  }
+
+  function migrationBannerHtml(){
+    const n = countInlineFiles();
+    if(n===0) return '';
+    return `<div class="warn-banner">⚠️ Найдено файлов (${n}), сохранённых старым способом внутри общего состояния — это может замедлять работу.
+      <button class="btn secondary" id="migrate-files-btn">☁️ Перенести в облако</button>
+    </div>`;
+  }
+
+  function wireFileAttach(fileState){
+    const listEl = document.getElementById('m-files-list');
+    const inputEl = document.getElementById('m-file-input');
+    if(!listEl || !inputEl) return;
+    function refresh(){
+      listEl.innerHTML = filesListInnerHtml(fileState.files);
+      listEl.querySelectorAll('.m-file-del').forEach(btn=>{
+        btn.onclick = ()=>{
+          const removed = fileState.files.find(f=>f.id===btn.dataset.fid);
+          fileState.files = fileState.files.filter(f=>f.id!==btn.dataset.fid);
+          refresh();
+          if(removed) removeFileFromStorage(removed);
+        };
+      });
+    }
+    refresh();
+    inputEl.onchange = async ()=>{
+      const chosen = Array.from(inputEl.files||[]);
+      if(chosen.length===0) return;
+      inputEl.disabled = true;
+      const modalEl = inputEl.closest('.modal');
+      const saveButtons = modalEl ? Array.from(modalEl.querySelectorAll('button[id^="m-save"]')) : [];
+      saveButtons.forEach(b=>b.disabled = true);
+      for(const file of chosen){
+        if(file.size > MAX_FILE_SIZE){
+          alert('Файл «'+file.name+'» слишком большой (макс. 100 МБ).');
+          continue;
+        }
+        const tempId = 'up-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
+        fileState.files.push({id:tempId, name:file.name, type:file.type||'', size:file.size, uploading:true});
+        refresh();
+        try{
+          const meta = await uploadFileToStorage(file);
+          const idx = fileState.files.findIndex(f=>f.id===tempId);
+          if(idx>-1) fileState.files[idx] = meta;
+        } catch(err){
+          const idx = fileState.files.findIndex(f=>f.id===tempId);
+          if(idx>-1) fileState.files.splice(idx,1);
+          alert('Не удалось загрузить файл «'+file.name+'»: '+(err&&err.message?err.message:'ошибка загрузки'));
+        }
+        refresh();
+      }
+      inputEl.disabled = false;
+      saveButtons.forEach(b=>b.disabled = false);
+      inputEl.value = '';
+    };
+  }
+
+  // closes a modal and cleans up any files that were uploaded to Storage during
+  // this modal session but never actually got saved (user hit "Закрыть"/cancel)
+  function closeModalCleaningUpFiles(fileState, originalFiles){
+    const originalIds = new Set((originalFiles||[]).map(f=>f.id));
+    const orphaned = (fileState.files||[]).filter(f=>f.storage==='supabase' && !originalIds.has(f.id));
+    closeModal();
+    orphaned.forEach(removeFileFromStorage);
+  }
+
   // ---- modal (edit subject + homework) ----
   let modalState = null; // {kid,date,start,end,isNew}
 
@@ -1192,7 +1506,7 @@
     const {kid,date,start,end} = modalState;
     const kidObj = KIDS.find(k=>k.id===kid);
     const key = keyOf(kid,date,start);
-    const hw = homeworkData[key] || {text:'',done:false};
+    const hw = homeworkData[key] || {text:'',done:false,files:[]};
     const custom = findCustomLesson(kid,date,start);
     const subj = resolvedSubject(kid,date,start);
     const [y,m,d] = date.split('-');
@@ -1213,11 +1527,12 @@
       <label class="m-label">Домашнее задание</label>
       <textarea id="m-text" placeholder="Домашнее задание…">${escapeHtml(hw.text)}</textarea>
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
+      ${fileAttachSectionHtml(hw.files||[])}
       ${(!custom)?`<div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Если поменяли предмет — выберите, применить изменение только к этому дню или ко всем таким же урокам начиная с этой недели.</div>`:''}
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
         <div class="right">
-          ${custom?`<button class="btn danger" id="m-delete-lesson">Удалить занятие</button>`:(hw.text?`<button class="btn danger" id="m-delete">Удалить ДЗ</button>`:'')}
+          ${custom?`<button class="btn danger" id="m-delete-lesson">Удалить занятие</button>`:(hwHasContent(hw)?`<button class="btn danger" id="m-delete">Удалить ДЗ</button>`:'')}
           ${custom
             ? `<button class="btn" id="m-save">Сохранить</button>`
             : `<button class="btn secondary" id="m-save-week">Только эта неделя</button><button class="btn" id="m-save-all">На все недели вперёд</button>`}
@@ -1225,8 +1540,10 @@
       </div>
     </div>`;
     document.body.appendChild(div);
-    document.getElementById('m-close').onclick = closeModal;
-    div.onclick = (e)=>{ if(e.target===div) closeModal(); };
+    const fileState = {files: (hw.files||[]).filter(f=>!f.uploading).slice()};
+    wireFileAttach(fileState);
+    document.getElementById('m-close').onclick = ()=>closeModalCleaningUpFiles(fileState, hw.files||[]);
+    div.onclick = (e)=>{ if(e.target===div) closeModalCleaningUpFiles(fileState, hw.files||[]); };
 
     function readForm(){
       return {
@@ -1246,7 +1563,8 @@
       if(movedKey!==key){
         if(homeworkData[key]) { homeworkData[movedKey]=homeworkData[key]; delete homeworkData[key]; }
       }
-      if(text){ homeworkData[movedKey] = {text, done, subject:custom.subject}; }
+      const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      if(text || cleanFiles.length){ homeworkData[movedKey] = {text, done, subject:custom.subject, files:cleanFiles}; }
       else { delete homeworkData[movedKey]; }
       await persistAll();
       closeModal();
@@ -1268,7 +1586,8 @@
           delete overridesData[key];
         }
       }
-      if(text){ homeworkData[key] = {text, done, subject:newSubject||orig}; }
+      const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      if(text || cleanFiles.length){ homeworkData[key] = {text, done, subject:newSubject||orig, files:cleanFiles}; }
       else { delete homeworkData[key]; }
       await persistAll();
       closeModal();
@@ -1287,18 +1606,22 @@
     }
     const delBtn = document.getElementById('m-delete');
     if(delBtn) delBtn.onclick = async ()=>{
+      const oldFiles = (homeworkData[key] && homeworkData[key].files) || [];
       delete homeworkData[key];
       await persistAll();
       closeModal();
       render();
+      oldFiles.forEach(removeFileFromStorage);
     };
     const delLessonBtn = document.getElementById('m-delete-lesson');
     if(delLessonBtn) delLessonBtn.onclick = async ()=>{
+      const oldFiles = (homeworkData[key] && homeworkData[key].files) || [];
       customLessonsData = customLessonsData.filter(c=>c.id!==custom.id);
       delete homeworkData[key];
       await persistAll();
       closeModal();
       render();
+      oldFiles.forEach(removeFileFromStorage);
     };
   }
 
@@ -1325,14 +1648,17 @@
       <input type="text" id="m-subject" class="m-subject" placeholder="Например: Английский с репетитором" value="">
       <label class="m-label">Домашнее задание (необязательно)</label>
       <textarea id="m-text" placeholder="Домашнее задание…"></textarea>
+      ${fileAttachSectionHtml([])}
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Отмена</button>
         <div class="right"><button class="btn" id="m-save">Добавить</button></div>
       </div>
     </div>`;
     document.body.appendChild(div);
-    document.getElementById('m-close').onclick = closeModal;
-    div.onclick = (e)=>{ if(e.target===div) closeModal(); };
+    const fileState = {files: []};
+    wireFileAttach(fileState);
+    document.getElementById('m-close').onclick = ()=>closeModalCleaningUpFiles(fileState, []);
+    div.onclick = (e)=>{ if(e.target===div) closeModalCleaningUpFiles(fileState, []); };
     document.getElementById('m-save').onclick = async ()=>{
       const newKid = document.getElementById('m-kid').value;
       const newDate = document.getElementById('m-date').value;
@@ -1343,7 +1669,8 @@
       if(!newDate || !start || !subject){ alert('Укажите хотя бы дату, время начала и название.'); return; }
       const id = Date.now()+'-'+Math.random().toString(36).slice(2,7);
       customLessonsData.push({id, kid:newKid, date:newDate, start, end: end||start, subject});
-      if(text){ homeworkData[keyOf(newKid,newDate,start)] = {text, done:false, subject}; }
+      const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      if(text || cleanFiles.length){ homeworkData[keyOf(newKid,newDate,start)] = {text, done:false, subject, files:cleanFiles}; }
       await persistAll();
       closeModal();
       render();
@@ -1354,7 +1681,7 @@
     const {calendarId,date,start,end} = modalState;
     const cal = calendarsData.find(c=>c.id===calendarId) || {name:'Календарь', color:'#888'};
     const key = calHwKey(calendarId,date,start);
-    const hw = homeworkData[key] || {text:'',done:false};
+    const hw = homeworkData[key] || {text:'',done:false,files:[]};
     const rule = calRulesData.find(r=>r.calendarId===calendarId && r.start===start && calRuleMatchesDate(r,date));
     const subject = rule ? rule.subject : '';
     const dateLabel = fmtDate(date);
@@ -1367,6 +1694,7 @@
       <label class="m-label">Домашнее задание</label>
       <textarea id="m-text" placeholder="Домашнее задание…">${escapeHtml(hw.text)}</textarea>
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
+      ${fileAttachSectionHtml(hw.files||[])}
       <div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Чтобы изменить предмет, время или периодичность этого урока — используйте вкладку «Настройка расписания».</div>
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
@@ -1374,12 +1702,15 @@
       </div>
     </div>`;
     document.body.appendChild(div);
-    document.getElementById('m-close').onclick = closeModal;
-    div.onclick = (e)=>{ if(e.target===div) closeModal(); };
+    const fileState = {files: (hw.files||[]).filter(f=>!f.uploading).slice()};
+    wireFileAttach(fileState);
+    document.getElementById('m-close').onclick = ()=>closeModalCleaningUpFiles(fileState, hw.files||[]);
+    div.onclick = (e)=>{ if(e.target===div) closeModalCleaningUpFiles(fileState, hw.files||[]); };
     document.getElementById('m-save').onclick = async ()=>{
       const text = document.getElementById('m-text').value.trim();
       const done = document.getElementById('m-done').checked;
-      if(text){ homeworkData[key] = {text, done, subject}; } else { delete homeworkData[key]; }
+      const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      if(text || cleanFiles.length){ homeworkData[key] = {text, done, subject, files:cleanFiles}; } else { delete homeworkData[key]; }
       await persistAll();
       closeModal();
       render();
@@ -1486,7 +1817,7 @@
   function printCellText(kid,dateStr,lesson){
     const subj = resolvedSubject(kid,dateStr,lesson.start);
     const hw = homeworkData[keyOf(kid,dateStr,lesson.start)];
-    const flag = hw&&hw.text ? (hw.done?' ✅':' 📝') : '';
+    const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
     return escapeHtml(subj)+flag;
   }
 
@@ -1495,7 +1826,7 @@
     if(calList && calList.length){
       return calList.map(o=>{
         const hw = homeworkData[calHwKey(o.calendarId,dateStr,o.start)];
-        const flag = hw && hw.text ? (hw.done?' ✅':' 📝') : '';
+        const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
         return escapeHtml(o.subject)+flag;
       }).join('<br>');
     }
@@ -1563,6 +1894,26 @@
     });
     app.querySelectorAll('[data-hwsrc]').forEach(el=>el.onclick=()=>{hwFilterSource=el.dataset.hwsrc; render();});
     app.querySelectorAll('[data-hwstatus]').forEach(el=>el.onclick=()=>{hwFilterStatus=el.dataset.hwstatus; render();});
+    const migrateBtn = document.getElementById('migrate-files-btn');
+    if(migrateBtn) migrateBtn.onclick = migrateInlineFilesToCloud;
+    app.querySelectorAll('[data-libkid]').forEach(el=>el.onclick=()=>{libFilterKid=el.dataset.libkid; render();});
+    app.querySelectorAll('[data-libdel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить этот файл?')) return;
+      const raw = el.dataset.libdel;
+      const sep = raw.lastIndexOf('|');
+      const key = raw.slice(0, sep);
+      const fileId = raw.slice(sep+1);
+      const hw = homeworkData[key];
+      let removed = null;
+      if(hw && hw.files){
+        removed = hw.files.find(f=>f.id===fileId);
+        hw.files = hw.files.filter(f=>f.id!==fileId);
+        if(!hwHasContent(hw)) delete homeworkData[key];
+      }
+      await persistAll();
+      if(removed) removeFileFromStorage(removed);
+      render();
+    });
     app.querySelectorAll('[data-hwtoggle]').forEach(el=>el.onclick=async (e)=>{
       e.stopPropagation();
       const [kid,date,start] = el.dataset.hwtoggle.split('|');
@@ -1623,16 +1974,20 @@
     const calResetAll = document.getElementById('cal-reset-all');
     if(calResetAll) calResetAll.onclick = async ()=>{
       if(!confirm('Удалить ВСЕ календари и все их уроки? Связанные домашние задания тоже будут удалены. Действие необратимо.')) return;
-      const idsToRemove = calendarsData.map(c=>c.id);
       calendarsData = [];
       calRulesData = [];
       calSelectedId = null;
       calRuleEditId = null;
+      const filesToRemove = [];
       Object.keys(homeworkData).forEach(key=>{
-        if(key.startsWith('cal|')) delete homeworkData[key];
+        if(key.startsWith('cal|')){
+          (homeworkData[key].files||[]).forEach(f=>filesToRemove.push(f));
+          delete homeworkData[key];
+        }
       });
       await persistAll();
       render();
+      filesToRemove.forEach(removeFileFromStorage);
     };
     app.querySelectorAll('[data-calselect]').forEach(el=>el.onclick=()=>{
       const id = el.dataset.calselect;

@@ -206,6 +206,32 @@
   .reminder-date{font-family:'PT Serif',serif;font-weight:700;font-size:14px;width:110px;flex:none;}
   .reminder-item .rtext{flex:1;font-size:13.5px;}
   .reminder-item .rdel{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:16px;padding:2px 6px;}
+
+  /* grades tab */
+  .grades-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
+  .grades-list{display:flex;flex-direction:column;gap:10px;}
+  .gs-card{background:var(--card);border:1px solid var(--paper-line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);}
+  .gs-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:9px;}
+  .gs-name{font-family:'PT Serif',serif;font-weight:700;font-size:15.5px;flex:1;min-width:140px;}
+  .gs-avg{font-size:13px;color:var(--ink-soft);}
+  .gs-avg b{color:var(--ink);font-size:14.5px;}
+  .gs-need{font-size:12.5px;padding:2px 9px;border-radius:999px;background:var(--gold-soft);color:#7a5613;}
+  .gs-need.ok{background:var(--done-soft);color:var(--done);}
+  .gs-need.none{background:transparent;color:var(--ink-soft);padding:2px 0;}
+  .gs-grades{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .gs-chip{display:flex;align-items:center;gap:4px;background:var(--paper);border:1px solid var(--paper-line);border-radius:8px;padding:4px 6px;}
+  .gs-chip input[type=number]{font-family:inherit;font-size:13.5px;border:1px solid var(--paper-line);border-radius:5px;background:#fff;color:var(--ink);padding:3px 4px;}
+  .gs-chip .gs-val{width:44px;font-weight:700;text-align:center;}
+  .gs-chip .gs-weight{width:38px;text-align:center;}
+  .gs-chip .gs-x{color:var(--ink-soft);font-size:11px;}
+  .gs-chip .gs-del{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;}
+  .gs-chip .gs-del:hover{color:var(--warn);}
+  .gs-add-row{display:flex;align-items:center;gap:5px;background:transparent;border:1px dashed var(--paper-line);border-radius:8px;padding:4px 6px;}
+  .gs-add-row input[type=number]{font-family:inherit;font-size:13.5px;border:1px solid var(--paper-line);border-radius:5px;background:#fff;color:var(--ink);padding:3px 4px;}
+  .gs-add-row .gs-add-val{width:52px;}
+  .gs-add-row .gs-add-w{width:44px;}
+  .gs-add-row button{border:none;background:var(--ink);color:var(--paper);border-radius:6px;padding:4px 10px;font-size:12.5px;cursor:pointer;}
+  .gs-hint{font-size:11px;color:var(--ink-soft);margin:2px 0 14px;}
   .flag-icon{color:var(--margin);}
   .countdown{font-size:11.5px;color:var(--gold);font-weight:700;}
 
@@ -311,6 +337,13 @@
   let calRulesData = []; // {id, calendarId, subject, date, start, end, repeat:'none'|'daily'|'weekly'|'weekdays', weekdays:[0-6], until}
   let calSelectedId = null; // which calendar is expanded in settings tab
   let calRuleEditId = null; // rule currently being edited in settings tab
+  let gradesData = {}; // gradesData[kid][subject][trimester] = [{id,value,weight}]
+  let gradesKid = 'petya';
+  let gradesTri = 1;
+  let documentsData = []; // {id,title,category,note,files:[],createdAt}
+  let docFilterCat = 'all';
+  let docDraft = {files:[]}; // staged files for the "add document" form
+  let linksData = []; // {id,title,url,note,createdAt}
   let storageReady = false;
 
   // ---------- helpers ----------
@@ -492,6 +525,51 @@
     }));
   }
 
+  // ---------- grades ----------
+  // Only the main "lyceum" calendar per kid counts for grades — extra-activity
+  // calendars, custom one-off lessons and legacy ICS overrides are excluded.
+  function normCalName(s){ return (s||'').toLowerCase().replace(/[^a-zа-яё0-9]+/gi,''); }
+  function isLyceumCalendarForKid(cal, kid){
+    if(!cal || !cal.name) return false;
+    const n = normCalName(cal.name);
+    const kidName = kid==='petya' ? 'петя' : 'федя';
+    return n.includes('лицей') && n.includes(kidName);
+  }
+  function subjectsForKid(kid){
+    const set = new Set();
+    calRulesData.forEach(rule=>{
+      const cal = calendarsData.find(c=>c.id===rule.calendarId);
+      if(!isLyceumCalendarForKid(cal, kid)) return;
+      if(rule.subject && rule.subject.trim()) set.add(rule.subject.trim());
+    });
+    return Array.from(set).sort((a,b)=>a.localeCompare(b,'ru'));
+  }
+  function gradesFor(kid,subject,tri){
+    return (((gradesData[kid]||{})[subject]||{})[tri]) || [];
+  }
+  function ensureGradesSlot(kid,subject,tri){
+    if(!gradesData[kid]) gradesData[kid] = {};
+    if(!gradesData[kid][subject]) gradesData[kid][subject] = {};
+    if(!gradesData[kid][subject][tri]) gradesData[kid][subject][tri] = [];
+    return gradesData[kid][subject][tri];
+  }
+  function trimesterStats(kid,subject,tri){
+    const list = gradesFor(kid,subject,tri);
+    let sumW=0, sumWV=0;
+    list.forEach(g=>{
+      const v = Number(g.value); const w = Number(g.weight)||1;
+      if(!isFinite(v)) return;
+      sumW += w; sumWV += v*w;
+    });
+    if(sumW<=0) return {avg:null, sumW:0, sumWV:0, neededFives:null};
+    const avg = sumWV/sumW;
+    // how many more grades of "5" (weight 1) are needed so the rounded average reaches 5 (threshold 4.5)
+    let neededFives;
+    if(avg>=4.5) neededFives = 0;
+    else neededFives = Math.max(0, Math.ceil(9*sumW - 2*sumWV - 1e-9));
+    return {avg, sumW, sumWV, neededFives};
+  }
+
   // ---------- storage (Supabase) ----------
   const SUPABASE_URL = 'https://kwldvtadmnbkifqtggnb.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3bGR2dGFkbW5ia2lmcXRnZ25iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MDIxNjksImV4cCI6MjEwNDA3ODE2OX0.O3rYcWt_D-I2NfzChyswpnRaUZWFdhLmFp0G12KqbOU';
@@ -526,6 +604,9 @@
         recurringOverridesData = parsed.recurringOverrides || [];
         calendarsData = parsed.calendars || [];
         calRulesData = parsed.calRules || [];
+        gradesData = parsed.grades || {};
+        documentsData = parsed.documents || [];
+        linksData = parsed.links || [];
       } else {
         const local = localStorage.getItem('diary:diary-data');
         if (local) {
@@ -538,6 +619,9 @@
           recurringOverridesData = parsed.recurringOverrides || [];
           calendarsData = parsed.calendars || [];
           calRulesData = parsed.calRules || [];
+          gradesData = parsed.grades || {};
+          documentsData = parsed.documents || [];
+          linksData = parsed.links || [];
           await persistAll();
         }
       }
@@ -556,6 +640,9 @@
           recurringOverridesData = parsed.recurringOverrides || [];
           calendarsData = parsed.calendars || [];
           calRulesData = parsed.calRules || [];
+          gradesData = parsed.grades || {};
+          documentsData = parsed.documents || [];
+          linksData = parsed.links || [];
         }
       } catch(err){}
     }
@@ -575,7 +662,10 @@
       customLessons: customLessonsData,
       recurringOverrides: recurringOverridesData,
       calendars: calendarsData,
-      calRules: calRulesData
+      calRules: calRulesData,
+      grades: gradesData,
+      documents: documentsData,
+      links: linksData
     };
 
     try {
@@ -619,7 +709,9 @@
     if(state.tab==='schedule') html += renderScheduleTab();
     else if(state.tab==='calsettings') html += renderCalSettingsTab();
     else if(state.tab==='homework') html += renderHomeworkTab();
+    else if(state.tab==='grades') html += renderGradesTab();
     else if(state.tab==='library') html += renderLibraryTab();
+    else if(state.tab==='documents') html += renderDocumentsTab();
     else html += renderRemindersTab();
     app.innerHTML = html;
     attachHandlers();
@@ -636,7 +728,7 @@
   }
 
   function renderTabs(){
-    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['library','Библиотека'],['reminders','Напоминания и олимпиады']];
+    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады']];
     return `<nav class="tabs">${tabs.map(([id,label])=>
       `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>`;
   }
@@ -1045,6 +1137,68 @@
     return out;
   }
 
+  // ---- grades tab ----
+  function encSubj(s){ return encodeURIComponent(s); }
+  function decSubj(s){ return decodeURIComponent(s); }
+
+  function renderGradesTab(){
+    const subjects = subjectsForKid(gradesKid);
+    let out = `<div class="grades-toolbar">
+      <div class="seg">${KIDS.map(k=>`<button data-gradekid="${k.id}" class="${gradesKid===k.id?'active':''}">${k.name}</button>`).join('')}</div>
+      <div class="seg">${[1,2,3].map(t=>`<button data-gradetri="${t}" class="${gradesTri===t?'active':''}">${t}-й триместр</button>`).join('')}</div>
+    </div>
+    <div class="gs-hint">Средний балл считается с учётом веса оценки. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл округлялся до 5.</div>`;
+
+    if(subjects.length===0){
+      out += `<div class="empty-state">Предметов не найдено. Оценки собираются только из календарей «Петя_Лицей» и «Федя_Лицей» — добавьте туда уроки на вкладке «Настройка расписания».</div>`;
+      return out;
+    }
+
+    out += `<div class="grades-list">${subjects.map(subject=>{
+      const list = gradesFor(gradesKid, subject, gradesTri);
+      const stats = trimesterStats(gradesKid, subject, gradesTri);
+      const es = encSubj(subject);
+      let needHtml;
+      if(stats.avg===null){
+        needHtml = `<span class="gs-need none">оценок пока нет</span>`;
+      } else if(stats.neededFives===0){
+        needHtml = `<span class="gs-need ok">средний балл уже округляется до 5</span>`;
+      } else {
+        needHtml = `<span class="gs-need">нужно ещё ${stats.neededFives} ${pluralFive(stats.neededFives)}, чтобы было 5</span>`;
+      }
+      return `<div class="gs-card">
+        <div class="gs-header">
+          <span class="gs-name">${escapeHtml(subject)}</span>
+          <span class="gs-avg">Средний балл: <b>${stats.avg===null?'—':stats.avg.toFixed(2)}</b></span>
+          ${needHtml}
+        </div>
+        <div class="gs-grades">
+          ${list.map(g=>`<div class="gs-chip">
+            <input type="number" class="gs-val" min="1" max="5" step="1" value="${escAttr(String(g.value))}" data-gradeval="${gradesKid}|${es}|${gradesTri}|${g.id}">
+            <span class="gs-x">× вес</span>
+            <input type="number" class="gs-weight" min="1" step="1" value="${escAttr(String(g.weight))}" data-gradeweight="${gradesKid}|${es}|${gradesTri}|${g.id}">
+            <button class="gs-del" data-gradedel="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Удалить оценку">✕</button>
+          </div>`).join('')}
+          <div class="gs-add-row">
+            <input type="number" class="gs-add-val" min="1" max="5" step="1" placeholder="Оценка" id="ga-val-${es}-${gradesTri}">
+            <span class="gs-x">вес</span>
+            <input type="number" class="gs-add-w" min="1" step="1" value="1" id="ga-w-${es}-${gradesTri}">
+            <button data-gradeadd="${gradesKid}|${es}|${gradesTri}">+ добавить</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+    return out;
+  }
+
+  function pluralFive(n){
+    const n10 = n%10, n100 = n%100;
+    if(n100>=11 && n100<=14) return 'пятёрок';
+    if(n10===1) return 'пятёрку';
+    if(n10>=2 && n10<=4) return 'пятёрки';
+    return 'пятёрок';
+  }
+
   // ---- homework tab ----
   let hwFilterSource = 'all'; // 'all' | kid id
 
@@ -1318,6 +1472,146 @@
       <div class="lib-sub">${escapeHtml(kidLabel)} · ${dateLabel}${f.calName?' · '+escapeHtml(f.calName):''}</div>
       <button class="rdel" data-libdel="${f.key}|${f.file.id}">✕</button>
     </div>`;
+  }
+
+  // ---- documents tab (templates, forms, certificates) ----
+  const DOC_CATS = [['template','Шаблон'],['form','Бланк'],['certificate','Справка'],['other','Другое']];
+  function docCatLabel(cat){ const f = DOC_CATS.find(c=>c[0]===cat); return f?f[1]:'Другое'; }
+
+  function renderDocumentsTab(){
+    let out = `<div class="section-title">Добавить документ</div>
+    <div class="reminder-form" style="align-items:flex-start;">
+      <div class="field" style="flex:1 1 220px;"><label>Название</label><input type="text" id="doc-title" placeholder="Например: Справка для бассейна"></div>
+      <div class="field"><label>Тип</label><select id="doc-category">
+        ${DOC_CATS.map(([id,label])=>`<option value="${id}">${label}</option>`).join('')}
+      </select></div>
+      <div class="field" style="flex:1 1 220px;"><label>Заметка (необязательно)</label><input type="text" id="doc-note" placeholder="Комментарий"></div>
+    </div>
+    <label class="m-label">Файлы</label>
+    <div id="doc-files-list" class="m-files-list">${filesListInnerHtml(docDraft.files)}</div>
+    <label class="m-file-attach-label">📎 Прикрепить файл<input type="file" id="doc-file-input" multiple style="display:none;"></label>
+    <div style="margin:12px 0 20px;"><button class="btn" id="doc-add">Добавить документ</button></div>
+
+    <div class="filters"><div class="seg">
+      <button data-doccat="all" class="${docFilterCat==='all'?'active':''}">Все</button>
+      ${DOC_CATS.map(([id,label])=>`<button data-doccat="${id}" class="${docFilterCat===id?'active':''}">${label}</button>`).join('')}
+    </div></div>`;
+
+    let list = documentsData.slice();
+    if(docFilterCat!=='all') list = list.filter(d=>d.category===docFilterCat);
+    list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+
+    if(list.length===0){
+      out += `<div class="empty-state">Документов пока нет. Добавьте шаблон, бланк или справку выше — они будут храниться здесь отдельно от домашних заданий.</div>`;
+    } else {
+      out += `<div class="reminder-list">${list.map(docCardHtml).join('')}</div>`;
+    }
+
+    out += renderLinksSection();
+    return out;
+  }
+
+  // ---- useful links section (inside "Шаблоны и справки") ----
+  function renderLinksSection(){
+    let out = `<div class="section-title">Полезные ссылки</div>
+    <div class="reminder-form">
+      <div class="field" style="flex:1 1 200px;"><label>Название</label><input type="text" id="link-title" placeholder="Например: Сбор денег на подарок"></div>
+      <div class="field" style="flex:2 1 260px;"><label>Ссылка</label><input type="text" id="link-url" placeholder="https://…"></div>
+      <div class="field" style="flex:1 1 200px;"><label>Заметка (необязательно)</label><input type="text" id="link-note" placeholder="Комментарий"></div>
+      <button class="btn" id="link-add">Добавить ссылку</button>
+    </div>`;
+
+    const links = linksData.slice().sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+    if(links.length===0){
+      out += `<div class="empty-state">Ссылок пока нет. Например, сюда можно добавить сбор денежных средств, учёт питания, форму для голосования и т.п.</div>`;
+      return out;
+    }
+    out += `<div class="reminder-list">${links.map(linkCardHtml).join('')}</div>`;
+    return out;
+  }
+
+  function normalizeUrl(u){
+    u = (u||'').trim();
+    if(!u) return '';
+    if(!/^https?:\/\//i.test(u)) u = 'https://'+u;
+    return u;
+  }
+
+  function linkCardHtml(l){
+    return `<div class="reminder-item">
+      <div class="rtext">
+        <a href="${escAttr(l.url)}" target="_blank" rel="noopener" style="color:var(--ink);font-weight:700;text-decoration:none;">${escapeHtml(l.title||l.url)}</a>
+        ${l.note?` · <span style="color:var(--ink-soft);">${escapeHtml(l.note)}</span>`:''}
+        <div style="font-size:11.5px;color:var(--ink-soft);word-break:break-all;">${escapeHtml(l.url)}</div>
+      </div>
+      <button class="rdel" data-linkdel="${l.id}">✕</button>
+    </div>`;
+  }
+
+  function docCardHtml(d){
+    return `<div class="reminder-item" style="align-items:flex-start;flex-direction:column;gap:6px;">
+      <div style="display:flex;width:100%;align-items:center;gap:10px;">
+        <span class="kid-tag" style="background:var(--gold-soft);color:#7a5613;">${escapeHtml(docCatLabel(d.category))}</span>
+        <b style="flex:1;">${escapeHtml(d.title||'Без названия')}</b>
+        <button class="rdel" data-docdel="${d.id}">✕</button>
+      </div>
+      ${d.note?`<div style="font-size:13px;color:var(--ink-soft);">${escapeHtml(d.note)}</div>`:''}
+      ${docFilesListHtml(d)}
+    </div>`;
+  }
+
+  function docFilesListHtml(d){
+    if(!d.files || !d.files.length) return `<div style="font-size:11.5px;color:var(--ink-soft);">Файлов нет</div>`;
+    return `<div class="m-files-list">${d.files.map(f=>{
+      const url = fileUrl(f);
+      const isImg = f.type && f.type.startsWith('image/');
+      const preview = `${isImg?`<img src="${url}">`:'<span class="m-file-icon">📄</span>'}<span class="m-file-name" title="${escAttr(f.name)}">${escapeHtml(f.name)}</span>`;
+      const body = url
+        ? `<a href="${url}" download="${escAttr(f.name)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:5px;min-width:0;">${preview}</a>`
+        : `<span style="display:flex;align-items:center;gap:5px;min-width:0;color:var(--ink-soft);">${preview}</span>`;
+      return `<div class="m-file-chip">${body}<button type="button" class="m-file-del" data-docfiledel="${d.id}|${f.id}">✕</button></div>`;
+    }).join('')}</div>`;
+  }
+
+  function wireDocFileAttach(){
+    const listEl = document.getElementById('doc-files-list');
+    const inputEl = document.getElementById('doc-file-input');
+    if(!listEl || !inputEl) return;
+    function refresh(){
+      listEl.innerHTML = filesListInnerHtml(docDraft.files);
+      listEl.querySelectorAll('.m-file-del').forEach(btn=>{
+        btn.onclick = ()=>{
+          const removed = docDraft.files.find(f=>f.id===btn.dataset.fid);
+          docDraft.files = docDraft.files.filter(f=>f.id!==btn.dataset.fid);
+          refresh();
+          if(removed) removeFileFromStorage(removed);
+        };
+      });
+    }
+    refresh();
+    inputEl.onchange = async ()=>{
+      const chosen = Array.from(inputEl.files||[]);
+      if(chosen.length===0) return;
+      inputEl.disabled = true;
+      for(const file of chosen){
+        if(file.size > MAX_FILE_SIZE){ alert('Файл «'+file.name+'» слишком большой (макс. 100 МБ).'); continue; }
+        const tempId = 'up-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
+        docDraft.files.push({id:tempId, name:file.name, type:file.type||'', size:file.size, uploading:true});
+        refresh();
+        try{
+          const meta = await uploadFileToStorage(file);
+          const idx = docDraft.files.findIndex(f=>f.id===tempId);
+          if(idx>-1) docDraft.files[idx] = meta;
+        } catch(err){
+          const idx = docDraft.files.findIndex(f=>f.id===tempId);
+          if(idx>-1) docDraft.files.splice(idx,1);
+          alert('Не удалось загрузить файл «'+file.name+'»: '+(err&&err.message?err.message:'ошибка загрузки'));
+        }
+        refresh();
+      }
+      inputEl.disabled = false;
+      inputEl.value = '';
+    };
   }
 
   // ---- homework file attachments (Supabase Storage) ----
@@ -1836,17 +2130,17 @@
   function printHomework(kidId){
     const kid = KIDS.find(k=>k.id===kidId);
     const genDate = new Date().toLocaleDateString('ru-RU');
-    let entries = collectHomework().filter(e=> e.kid===kidId || e.kid==='both');
+    let entries = collectHomework().filter(e=> (e.kid===kidId || e.kid==='both') && !e.done);
     entries.sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
     let html = `<h1>Домашние задания — ${kid.name}</h1>
-      <div class="p-sub">сформировано ${genDate}</div>`;
+      <div class="p-sub">сформировано ${genDate} · только невыполненные</div>`;
     if(entries.length===0){
-      html += `<p>Домашних заданий нет.</p>`;
+      html += `<p>Невыполненных домашних заданий нет.</p>`;
     } else {
-      html += `<table><thead><tr><th>Дата</th><th>Предмет</th><th>Задание</th><th>Статус</th></tr></thead><tbody>${entries.map(e=>{
+      html += `<table><thead><tr><th>Дата</th><th>Предмет</th><th>Задание</th></tr></thead><tbody>${entries.map(e=>{
         const [y,m,d]=e.date.split('-');
         const subjLabel = e.isCal ? escapeHtml(e.subject)+' <span style="opacity:.6;">('+escapeHtml(e.calName)+')</span>' : escapeHtml(e.subject);
-        return `<tr><td>${d}.${m}.${y}</td><td>${subjLabel}</td><td>${escapeHtml(e.text)}</td><td>${e.done?'выполнено':'☐'}</td></tr>`;
+        return `<tr><td>${d}.${m}.${y}</td><td>${subjLabel}</td><td>${escapeHtml(e.text)}</td></tr>`;
       }).join('')}</tbody></table>`;
     }
     doPrint(html, 'Домашние задания — '+kid.name);
@@ -2121,6 +2415,105 @@
       await persistAll();
       render();
     });
+    // ---- grades tab handlers ----
+    app.querySelectorAll('[data-gradekid]').forEach(el=>el.onclick=()=>{ gradesKid = el.dataset.gradekid; render(); });
+    app.querySelectorAll('[data-gradetri]').forEach(el=>el.onclick=()=>{ gradesTri = parseInt(el.dataset.gradetri,10); render(); });
+    app.querySelectorAll('[data-gradeadd]').forEach(el=>el.onclick=async ()=>{
+      const [kid, es, triStr] = el.dataset.gradeadd.split('|');
+      const subject = decSubj(es);
+      const tri = parseInt(triStr,10);
+      const valEl = document.getElementById('ga-val-'+es+'-'+tri);
+      const wEl = document.getElementById('ga-w-'+es+'-'+tri);
+      const value = parseFloat(valEl.value);
+      const weight = parseFloat(wEl.value) || 1;
+      if(!isFinite(value) || value<1 || value>5){ alert('Введите оценку от 1 до 5.'); return; }
+      const list = ensureGradesSlot(kid, subject, tri);
+      list.push({id:'g'+Date.now()+'-'+Math.random().toString(36).slice(2,7), value, weight});
+      await persistAll();
+      render();
+    });
+    app.querySelectorAll('[data-gradeval]').forEach(el=>el.onchange=async ()=>{
+      const [kid, es, triStr, id] = el.dataset.gradeval.split('|');
+      const subject = decSubj(es);
+      const tri = parseInt(triStr,10);
+      const list = gradesFor(kid, subject, tri);
+      const g = list.find(x=>x.id===id);
+      const value = parseFloat(el.value);
+      if(g && isFinite(value)){ g.value = Math.min(5, Math.max(1, value)); await persistAll(); }
+      render();
+    });
+    app.querySelectorAll('[data-gradeweight]').forEach(el=>el.onchange=async ()=>{
+      const [kid, es, triStr, id] = el.dataset.gradeweight.split('|');
+      const subject = decSubj(es);
+      const tri = parseInt(triStr,10);
+      const list = gradesFor(kid, subject, tri);
+      const g = list.find(x=>x.id===id);
+      const weight = parseFloat(el.value);
+      if(g){ g.weight = (isFinite(weight) && weight>0) ? weight : 1; await persistAll(); }
+      render();
+    });
+    app.querySelectorAll('[data-gradedel]').forEach(el=>el.onclick=async ()=>{
+      const [kid, es, triStr, id] = el.dataset.gradedel.split('|');
+      const subject = decSubj(es);
+      const tri = parseInt(triStr,10);
+      const list = gradesFor(kid, subject, tri);
+      const idx = list.findIndex(x=>x.id===id);
+      if(idx>=0) list.splice(idx,1);
+      await persistAll();
+      render();
+    });
+
+    // ---- documents tab handlers ----
+    wireDocFileAttach();
+    app.querySelectorAll('[data-doccat]').forEach(el=>el.onclick=()=>{ docFilterCat = el.dataset.doccat; render(); });
+    const docAdd = document.getElementById('doc-add');
+    if(docAdd) docAdd.onclick = async ()=>{
+      const title = (document.getElementById('doc-title').value||'').trim();
+      const category = document.getElementById('doc-category').value || 'other';
+      const note = (document.getElementById('doc-note').value||'').trim();
+      const files = docDraft.files.filter(f=>!f.uploading);
+      if(!title && files.length===0){ alert('Укажите название или прикрепите файл.'); return; }
+      documentsData.push({id:'doc'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title, category, note, files, createdAt:Date.now()});
+      docDraft.files = [];
+      await persistAll();
+      render();
+    };
+    app.querySelectorAll('[data-docdel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить документ вместе с прикреплёнными файлами?')) return;
+      const id = el.dataset.docdel;
+      const doc = documentsData.find(d=>d.id===id);
+      documentsData = documentsData.filter(d=>d.id!==id);
+      await persistAll();
+      render();
+      if(doc) (doc.files||[]).forEach(removeFileFromStorage);
+    });
+    app.querySelectorAll('[data-docfiledel]').forEach(el=>el.onclick=async ()=>{
+      const [docId, fileId] = el.dataset.docfiledel.split('|');
+      const doc = documentsData.find(d=>d.id===docId);
+      if(doc){
+        const removed = (doc.files||[]).find(f=>f.id===fileId);
+        doc.files = (doc.files||[]).filter(f=>f.id!==fileId);
+        await persistAll();
+        render();
+        if(removed) removeFileFromStorage(removed);
+      }
+    });
+    const linkAdd = document.getElementById('link-add');
+    if(linkAdd) linkAdd.onclick = async ()=>{
+      const title = (document.getElementById('link-title').value||'').trim();
+      const url = normalizeUrl(document.getElementById('link-url').value);
+      const note = (document.getElementById('link-note').value||'').trim();
+      if(!url){ alert('Укажите ссылку.'); return; }
+      linksData.push({id:'lnk'+Date.now()+'-'+Math.random().toString(36).slice(2,7), title, url, note, createdAt:Date.now()});
+      await persistAll();
+      render();
+    };
+    app.querySelectorAll('[data-linkdel]').forEach(el=>el.onclick=async ()=>{
+      linksData = linksData.filter(l=>l.id!==el.dataset.linkdel);
+      await persistAll();
+      render();
+    });
+
     const ps = document.getElementById('print-schedule');
     if(ps) ps.onclick = printSchedule;
     const phP = document.getElementById('print-hw-petya');

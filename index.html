@@ -30,6 +30,7 @@
     --shadow:0 1px 2px rgba(38,49,61,.08), 0 4px 14px rgba(38,49,61,.06);
   }
   *{box-sizing:border-box;}
+  html{overflow-x:hidden;}
   html,body{margin:0;padding:0;}
   body{
     background:var(--paper);
@@ -39,6 +40,7 @@
     font-size:15px;
     line-height:1.45;
     min-height:100vh;
+    overflow-x:hidden;
     padding-left:26px;
     position:relative;
   }
@@ -109,6 +111,8 @@
   .m-file-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;}
   .m-file-del{border:none;background:none;cursor:pointer;color:#a33;font-size:12px;padding:0;line-height:1;}
   .m-file-attach-label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12.5px;color:var(--ink);background:#fff;border:1px solid var(--paper-line);border-radius:7px;padding:6px 10px;margin-bottom:8px;}
+  .m-lib-pick{display:flex;gap:6px;align-items:center;margin-bottom:10px;}
+  .m-lib-pick select{flex:1;min-width:0;font-family:inherit;font-size:12.5px;padding:6px 8px;border:1px solid var(--paper-line);border-radius:7px;background:#fff;color:var(--ink);}
 
   /* library tab */
   .lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:8px;}
@@ -209,29 +213,52 @@
 
   /* grades tab */
   .grades-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
-  .grades-list{display:flex;flex-direction:column;gap:10px;}
-  .gs-card{background:var(--card);border:1px solid var(--paper-line);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);}
-  .gs-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:9px;}
-  .gs-name{font-family:'PT Serif',serif;font-weight:700;font-size:15.5px;flex:1;min-width:140px;}
-  .gs-avg{font-size:13px;color:var(--ink-soft);}
-  .gs-avg b{color:var(--ink);font-size:14.5px;}
-  .gs-need{font-size:12.5px;padding:2px 9px;border-radius:999px;background:var(--gold-soft);color:#7a5613;}
+  .grades-table{width:100%;border-collapse:collapse;}
+  .grades-table th{text-align:left;font-family:'PT Serif',serif;font-weight:700;font-size:12.5px;color:var(--ink-soft);padding:0 10px 8px;border-bottom:2px solid var(--paper-line);}
+  .grades-table td{padding:9px 10px;border-bottom:1px solid var(--paper-line);vertical-align:middle;}
+  .grades-table tr:last-child td{border-bottom:none;}
+  .gt-subject{font-family:'PT Serif',serif;font-weight:700;font-size:14px;white-space:nowrap;}
+  .gt-grades{width:100%;}
+  .gt-avg{text-align:center;white-space:nowrap;}
+  .gt-avg b{font-family:'PT Serif',serif;font-size:16px;color:var(--ink);}
+  .gt-need{white-space:nowrap;}
+  .gs-need{font-size:11.5px;padding:2px 9px;border-radius:999px;background:var(--gold-soft);color:#7a5613;}
   .gs-need.ok{background:var(--done-soft);color:var(--done);}
   .gs-need.none{background:transparent;color:var(--ink-soft);padding:2px 0;}
-  .gs-grades{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
-  .gs-chip{display:flex;align-items:center;gap:4px;background:var(--paper);border:1px solid var(--paper-line);border-radius:8px;padding:4px 6px;}
-  .gs-chip input[type=number]{font-family:inherit;font-size:13.5px;border:1px solid var(--paper-line);border-radius:5px;background:#fff;color:var(--ink);padding:3px 4px;}
-  .gs-chip .gs-val{width:44px;font-weight:700;text-align:center;}
-  .gs-chip .gs-weight{width:38px;text-align:center;}
-  .gs-chip .gs-x{color:var(--ink-soft);font-size:11px;}
-  .gs-chip .gs-del{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;}
-  .gs-chip .gs-del:hover{color:var(--warn);}
-  .gs-add-row{display:flex;align-items:center;gap:5px;background:transparent;border:1px dashed var(--paper-line);border-radius:8px;padding:4px 6px;}
-  .gs-add-row input[type=number]{font-family:inherit;font-size:13.5px;border:1px solid var(--paper-line);border-radius:5px;background:#fff;color:var(--ink);padding:3px 4px;}
-  .gs-add-row .gs-add-val{width:52px;}
-  .gs-add-row .gs-add-w{width:44px;}
-  .gs-add-row button{border:none;background:var(--ink);color:var(--paper);border-radius:6px;padding:4px 10px;font-size:12.5px;cursor:pointer;}
+  .gs-grades{display:flex;flex-wrap:wrap;gap:2px 4px;align-items:center;}
+  /* a single grade shown as "value" with weight as a small superscript exponent, e.g. 4² */
+  .gs-grade{position:relative;display:inline-flex;align-items:flex-start;padding:2px 9px 2px 4px;border-radius:6px;}
+  .gs-grade:hover{background:var(--paper);}
+  .gs-grade input[type=number]{font-family:inherit;border:none;background:transparent;color:var(--ink);padding:0;text-align:center;-moz-appearance:textfield;}
+  .gs-grade input[type=number]::-webkit-outer-spin-button,
+  .gs-grade input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .gs-grade .gs-val{width:16px;font-weight:700;font-size:16px;border-bottom:1px dotted var(--paper-line);}
+  .gs-grade .gs-val:focus{outline:none;border-bottom:1px solid var(--ink);}
+  .gs-grade .gs-weight{width:15px;font-size:10px;color:var(--ink-soft);position:relative;top:-5px;margin-left:1px;}
+  .gs-grade .gs-weight:focus{outline:none;color:var(--ink);}
+  .gs-grade .gs-del{position:absolute;top:-6px;right:-2px;background:var(--ink);color:var(--paper);border:none;border-radius:50%;width:13px;height:13px;line-height:13px;font-size:9px;cursor:pointer;padding:0;opacity:0;transition:opacity .15s;}
+  .gs-grade:hover .gs-del{opacity:1;}
+  .gs-add-inline{display:inline-flex;align-items:center;gap:2px;border:1px dashed var(--paper-line);border-radius:6px;padding:2px 6px;margin-left:2px;}
+  .gs-add-inline input[type=number]{font-family:inherit;font-size:13px;border:none;background:transparent;color:var(--ink);padding:0;text-align:center;-moz-appearance:textfield;}
+  .gs-add-inline input[type=number]::-webkit-outer-spin-button,
+  .gs-add-inline input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .gs-add-inline .gs-add-val{width:18px;font-weight:700;}
+  .gs-add-inline .gs-add-x{color:var(--ink-soft);font-size:11px;}
+  .gs-add-inline .gs-add-w{width:14px;font-size:11px;color:var(--ink-soft);}
+  .gs-add-inline button{border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;}
+  .gs-add-inline button:hover{color:var(--ink);}
   .gs-hint{font-size:11px;color:var(--ink-soft);margin:2px 0 14px;}
+  .gt-subdel{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:2px 4px;opacity:.55;}
+  .gt-subdel:hover{opacity:1;color:var(--warn);}
+  .gs-hidden-subjects{margin-top:14px;padding-top:10px;border-top:1px dashed var(--paper-line);font-size:12.5px;color:var(--ink-soft);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .gs-hidden-label{margin-right:2px;}
+  .gs-hidden-chip{background:var(--paper);border:1px solid var(--paper-line);border-radius:999px;padding:3px 8px;display:inline-flex;align-items:center;gap:5px;}
+  .gs-hidden-chip button{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:12px;padding:0;}
+  .gs-hidden-chip button:hover{color:var(--ink);}
+  .bulk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--paper-line);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12.5px;}
+  .bulk-bar input[type=date]{font-family:inherit;font-size:12.5px;padding:5px 7px;border:1px solid var(--paper-line);border-radius:6px;}
+  .bulk-count{font-weight:700;}
+  .reminder-item .cr-select{margin-right:2px;}
   .flag-icon{color:var(--margin);}
   .countdown{font-size:11.5px;color:var(--gold);font-weight:700;}
 
@@ -344,6 +371,9 @@
   let docFilterCat = 'all';
   let docDraft = {files:[]}; // staged files for the "add document" form
   let linksData = []; // {id,title,url,note,createdAt}
+  let excludedSubjectsData = {petya:[], fedya:[]}; // subjects hidden from grading per kid
+  let fileLibraryData = []; // persistent registry of every uploaded homework file, independent of which homework entry currently references it
+  let selectedRuleIds = new Set(); // multi-selected calendar rule ids in "Настройка расписания" for bulk edits
   let storageReady = false;
 
   // ---------- helpers ----------
@@ -480,7 +510,13 @@
     });
     return Object.keys(map).sort().map(time=>({time, ...map[time]}));
   }
-  function calHwKey(calendarId, dateStr, start){ return 'cal|'+calendarId+'|'+dateStr+'|'+start; }
+  function calHwKey(calendarId, ruleId, dateStr, start){
+    // include the specific rule id so a truncated/replaced rule can never leak its old
+    // homework into a different rule that later reuses the same calendar/day/time slot.
+    // falls back to the legacy (pre-fix) key shape when no rule id is known, so existing
+    // saved data keeps resolving correctly until it's next edited and re-saved.
+    return ruleId ? ('cal|'+calendarId+'|'+ruleId+'|'+dateStr+'|'+start) : ('cal|'+calendarId+'|'+dateStr+'|'+start);
+  }
   function fmtDate(dateStr){
     const [y,m,d] = dateStr.split('-');
     return d+' '+MONTHS_GEN[parseInt(m,10)-1]+' '+y;
@@ -607,6 +643,8 @@
         gradesData = parsed.grades || {};
         documentsData = parsed.documents || [];
         linksData = parsed.links || [];
+        excludedSubjectsData = parsed.excludedSubjects || {petya:[], fedya:[]};
+        fileLibraryData = parsed.fileLibrary || [];
       } else {
         const local = localStorage.getItem('diary:diary-data');
         if (local) {
@@ -622,6 +660,8 @@
           gradesData = parsed.grades || {};
           documentsData = parsed.documents || [];
           linksData = parsed.links || [];
+          excludedSubjectsData = parsed.excludedSubjects || {petya:[], fedya:[]};
+          fileLibraryData = parsed.fileLibrary || [];
           await persistAll();
         }
       }
@@ -643,6 +683,8 @@
           gradesData = parsed.grades || {};
           documentsData = parsed.documents || [];
           linksData = parsed.links || [];
+          excludedSubjectsData = parsed.excludedSubjects || {petya:[], fedya:[]};
+          fileLibraryData = parsed.fileLibrary || [];
         }
       } catch(err){}
     }
@@ -665,7 +707,9 @@
       calRules: calRulesData,
       grades: gradesData,
       documents: documentsData,
-      links: linksData
+      links: linksData,
+      excludedSubjects: excludedSubjectsData,
+      fileLibrary: fileLibraryData
     };
 
     try {
@@ -893,7 +937,7 @@
     if(oldLesson) return lessonCellHtml(kid, dateStr, oldLesson);
     if(calList && calList.length){
       return `<td>${calList.map(o=>{
-        const hw = homeworkData[calHwKey(o.calendarId,dateStr,o.start)];
+        const hw = homeworkData[calHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
         const flag = hwHasContent(hw) ? (hw.done?'✅':'📝') : '';
         return `<div class="cell-lesson" style="border-left:3px solid ${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">
           <span class="cell-subject">${escapeHtml(o.subject)}</span>
@@ -913,7 +957,7 @@
     }
     if(calList && calList.length){
       const items = calList.map(o=>{
-        const hw = homeworkData[calHwKey(o.calendarId,dateStr,o.start)];
+        const hw = homeworkData[calHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
         const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
         return `<span class="wd-cell" style="background:${o.color}22;color:${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">${escapeHtml(o.subject)}${flag}</span>`;
       }).join('');
@@ -1121,13 +1165,25 @@
         ${editRule?`<button class="btn secondary" id="cr-cancel">Отмена</button>`:''}
       </div>
     </div>
-    <div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 12px;">Чтобы поменять расписание с какой-то даты в будущем: у старого урока укажите «Окончание периодичности» (последний день по старому расписанию), затем добавьте новый урок с новой периодичностью, начиная со следующей даты.</div>`;
+    <div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 12px;">Чтобы поменять расписание с какой-то даты в будущем: у старого урока укажите «Окончание периодичности» (последний день по старому расписанию), затем добавьте новый урок с новой периодичностью, начиная со следующей даты. Отметьте несколько уроков галочками ниже, чтобы применить массовое ограничение периодичности или удаление сразу ко всем выбранным.</div>`;
 
     if(rules.length===0){
       out += `<div class="empty-state">Уроков в этом календаре пока нет.</div>`;
     } else {
+      const selectedHere = rules.filter(r=>selectedRuleIds.has(r.id));
+      out += `<div class="bulk-bar">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;">
+          <input type="checkbox" id="cr-selectall" ${selectedHere.length===rules.length?'checked':''}> выбрать все
+        </label>
+        ${selectedHere.length>0?`<span class="bulk-count">Выбрано: ${selectedHere.length}</span>
+          <input type="date" id="cr-bulk-until" placeholder="Окончание периодичности">
+          <button class="btn secondary" id="cr-bulk-apply">Установить окончание для выбранных</button>
+          <button class="btn danger" id="cr-bulk-delete">Удалить выбранные</button>
+          <button class="btn secondary" id="cr-bulk-clear">Снять выделение</button>`:''}
+      </div>`;
       out += `<div class="reminder-list">${rules.map(r=>`
         <div class="reminder-item">
+          <input type="checkbox" class="cr-select" data-ruleselect="${r.id}" ${selectedRuleIds.has(r.id)?'checked':''}>
           <div class="reminder-date">${fmtDate(r.date)}</div>
           <div class="rtext"><b>${escapeHtml(r.subject)}</b> · ${ruleTimeLabel(r)} · ${repeatLabel(r)} · ${untilLabel(r)}</div>
           <button class="btn secondary" data-credit="${r.id}">Изменить</button>
@@ -1142,52 +1198,65 @@
   function decSubj(s){ return decodeURIComponent(s); }
 
   function renderGradesTab(){
-    const subjects = subjectsForKid(gradesKid);
+    const allSubjects = subjectsForKid(gradesKid);
+    const excluded = excludedSubjectsData[gradesKid] || [];
+    const subjects = allSubjects.filter(s=>!excluded.includes(s));
     let out = `<div class="grades-toolbar">
       <div class="seg">${KIDS.map(k=>`<button data-gradekid="${k.id}" class="${gradesKid===k.id?'active':''}">${k.name}</button>`).join('')}</div>
       <div class="seg">${[1,2,3].map(t=>`<button data-gradetri="${t}" class="${gradesTri===t?'active':''}">${t}-й триместр</button>`).join('')}</div>
     </div>
-    <div class="gs-hint">Средний балл считается с учётом веса оценки. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл округлялся до 5.</div>`;
+    <div class="gs-hint">Оценка показана числом, вес — маленькой цифрой сверху (например 4² = оценка 4 с весом 2). Оценку и вес можно менять прямо на месте. Средний балл считается с учётом веса. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл округлялся до 5. Кнопкой 🗑 у предмета можно убрать его из оценивания, если по нему оценки не ставятся.</div>`;
 
-    if(subjects.length===0){
+    if(subjects.length===0 && excluded.length===0){
       out += `<div class="empty-state">Предметов не найдено. Оценки собираются только из календарей «Петя_Лицей» и «Федя_Лицей» — добавьте туда уроки на вкладке «Настройка расписания».</div>`;
       return out;
     }
 
-    out += `<div class="grades-list">${subjects.map(subject=>{
-      const list = gradesFor(gradesKid, subject, gradesTri);
-      const stats = trimesterStats(gradesKid, subject, gradesTri);
-      const es = encSubj(subject);
-      let needHtml;
-      if(stats.avg===null){
-        needHtml = `<span class="gs-need none">оценок пока нет</span>`;
-      } else if(stats.neededFives===0){
-        needHtml = `<span class="gs-need ok">средний балл уже округляется до 5</span>`;
-      } else {
-        needHtml = `<span class="gs-need">нужно ещё ${stats.neededFives} ${pluralFive(stats.neededFives)}, чтобы было 5</span>`;
-      }
-      return `<div class="gs-card">
-        <div class="gs-header">
-          <span class="gs-name">${escapeHtml(subject)}</span>
-          <span class="gs-avg">Средний балл: <b>${stats.avg===null?'—':stats.avg.toFixed(2)}</b></span>
-          ${needHtml}
-        </div>
-        <div class="gs-grades">
-          ${list.map(g=>`<div class="gs-chip">
-            <input type="number" class="gs-val" min="1" max="5" step="1" value="${escAttr(String(g.value))}" data-gradeval="${gradesKid}|${es}|${gradesTri}|${g.id}">
-            <span class="gs-x">× вес</span>
-            <input type="number" class="gs-weight" min="1" step="1" value="${escAttr(String(g.weight))}" data-gradeweight="${gradesKid}|${es}|${gradesTri}|${g.id}">
-            <button class="gs-del" data-gradedel="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Удалить оценку">✕</button>
-          </div>`).join('')}
-          <div class="gs-add-row">
-            <input type="number" class="gs-add-val" min="1" max="5" step="1" placeholder="Оценка" id="ga-val-${es}-${gradesTri}">
-            <span class="gs-x">вес</span>
+    if(subjects.length===0){
+      out += `<div class="empty-state">Все предметы убраны из оценивания. Верните нужные ниже.</div>`;
+    } else {
+      out += `<table class="grades-table"><thead><tr>
+        <th>Предмет</th><th>Оценки</th><th>Средний балл</th><th>Нужно 5</th><th></th>
+      </tr></thead><tbody>${subjects.map(subject=>{
+        const list = gradesFor(gradesKid, subject, gradesTri);
+        const stats = trimesterStats(gradesKid, subject, gradesTri);
+        const es = encSubj(subject);
+        let needHtml;
+        if(stats.avg===null){
+          needHtml = `<span class="gs-need none">—</span>`;
+        } else if(stats.neededFives===0){
+          needHtml = `<span class="gs-need ok">уже 5</span>`;
+        } else {
+          needHtml = `<span class="gs-need">ещё ${stats.neededFives} ${pluralFive(stats.neededFives)}</span>`;
+        }
+        return `<tr>
+          <td class="gt-subject">${escapeHtml(subject)}</td>
+          <td class="gt-grades"><div class="gs-grades">
+            ${list.map(g=>`<span class="gs-grade">
+              <input type="number" class="gs-val" min="1" max="5" step="1" value="${escAttr(String(g.value))}" data-gradeval="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Оценка">
+              <input type="number" class="gs-weight" min="1" step="1" value="${escAttr(String(g.weight))}" data-gradeweight="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Вес оценки">
+              <button class="gs-del" data-gradedel="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Удалить оценку">✕</button>
+            </span>`).join('')}
+            <span class="gs-add-inline" title="Добавить оценку">
+              <input type="number" class="gs-add-val" min="1" max="5" step="1" placeholder="•" id="ga-val-${es}-${gradesTri}">
+              <span class="gs-add-x">×</span>
             <input type="number" class="gs-add-w" min="1" step="1" value="1" id="ga-w-${es}-${gradesTri}">
-            <button data-gradeadd="${gradesKid}|${es}|${gradesTri}">+ добавить</button>
-          </div>
-        </div>
+            <button data-gradeadd="${gradesKid}|${es}|${gradesTri}">+</button>
+          </span>
+        </div></td>
+        <td class="gt-avg"><b>${stats.avg===null?'—':stats.avg.toFixed(2)}</b></td>
+        <td class="gt-need">${needHtml}</td>
+        <td><button class="gt-subdel" data-subjdel="${gradesKid}|${es}" title="Убрать предмет из оценивания">🗑</button></td>
+      </tr>`;
+      }).join('')}</tbody></table>`;
+    }
+
+    if(excluded.length>0){
+      out += `<div class="gs-hidden-subjects">
+        <span class="gs-hidden-label">Убраны из оценивания:</span>
+        ${excluded.map(s=>`<span class="gs-hidden-chip">${escapeHtml(s)} <button data-subjrestore="${gradesKid}|${encSubj(s)}" title="Вернуть предмет">↺</button></span>`).join('')}
       </div>`;
-    }).join('')}</div>`;
+    }
     return out;
   }
 
@@ -1206,7 +1275,7 @@
 
   function renderHomeworkTab(){
     const todayStr = iso(startOfDay(new Date()));
-    let entries = collectHomework();
+    let entries = collectHomework().filter(e=>!e.orphaned);
     entries.sort((a,b)=> (a.date+a.start).localeCompare(b.date+b.start));
     let filtered = entries;
     if(hwFilterSource!=='all'){
@@ -1233,6 +1302,7 @@
 
     if(filtered.length===0){
       out += `<div class="empty-state">Ничего не найдено. Нажмите на урок в расписании, чтобы добавить домашнее задание.</div>`;
+      out += renderOrphanedHomeworkSection();
       return out;
     }
 
@@ -1245,7 +1315,7 @@
         const col = cal?cal.color:'#555';
         const owner = e.kid==='both' ? {name:'Оба', soft:'#eee', hex:'#555'} : KIDS.find(k=>k.id===e.kid);
         return `<div class="hw-item ${overdue?'overdue':''} ${e.done?'done':''}">
-          <input type="checkbox" class="hw-check" ${e.done?'checked':''} data-hwtoggle-cal="${e.calendarId}|${e.date}|${e.start}">
+          <input type="checkbox" class="hw-check" ${e.done?'checked':''} data-hwtoggle-cal="${e.calendarId}|${e.ruleId||''}|${e.date}|${e.start}">
           <div class="hw-main" data-hwedit-cal="${e.calendarId}|${e.date}|${e.start}|${e.end||''}">
             <div class="hw-top-row">
               ${owner?`<span class="kid-tag" style="background:${owner.soft};color:${owner.hex};">${escapeHtml(owner.name)}</span>`:''}
@@ -1272,7 +1342,38 @@
         </div>
       </div>`;
     }).join('')}</div>`;
+    out += renderOrphanedHomeworkSection();
     return out;
+  }
+
+  // homework entries whose calendar rule was shortened/replaced/deleted after the
+  // homework was saved — they no longer belong to any currently-scheduled lesson,
+  // so they're kept visible here instead of silently vanishing or leaking into
+  // whatever new lesson now occupies that date/time slot.
+  function renderOrphanedHomeworkSection(){
+    const orphaned = collectHomework().filter(e=>e.orphaned);
+    if(orphaned.length===0) return '';
+    orphaned.sort((a,b)=> (b.date+b.start).localeCompare(a.date+a.start));
+    return `<div class="section-title" style="margin-top:26px;">Сохранённые записи вне расписания (${orphaned.length})</div>
+    <div class="gs-hint">Урок, к которому относились эти записи, был изменён, укорочен по сроку или удалён из «Настройки расписания» — сами записи домашнего задания не потерялись и хранятся здесь. Прикреплённые файлы всегда доступны в «Библиотеке» независимо от этого списка.</div>
+    <div class="hw-list">${orphaned.map(e=>{
+      const [y,m,d] = e.date.split('-');
+      const dateLabel = d+' '+MONTHS_GEN[parseInt(m,10)-1]+' '+y;
+      const owner = e.kid==='both' ? {name:'Оба', soft:'#eee', hex:'#555'} : KIDS.find(k=>k.id===e.kid);
+      return `<div class="hw-item ${e.done?'done':''}" style="opacity:.8;">
+        <div class="hw-main" style="cursor:default;">
+          <div class="hw-top-row">
+            ${owner?`<span class="kid-tag" style="background:${owner.soft};color:${owner.hex};">${escapeHtml(owner.name)}</span>`:''}
+            <span class="kid-tag" style="background:#eee;color:#888;">${escapeHtml(e.calName||'')}</span>
+            <span>${dateLabel}</span>
+            <span class="hw-subject">${escapeHtml(e.subject)}</span>
+          </div>
+          <div class="hw-text ${e.done?'done-text':''}">${escapeHtml(e.text)}</div>
+          ${hwFilesPreviewHtml(e.files)}
+        </div>
+        <button class="rdel" data-hworphandel="${e.calendarId}|${e.ruleId||''}|${e.date}|${e.start}" title="Удалить эту запись">✕</button>
+      </div>`;
+    }).join('')}</div>`;
   }
 
   function hwFilesPreviewHtml(files){
@@ -1294,14 +1395,24 @@
       if(!hwHasContent(hw)) return;
       const parts = key.split('|');
       if(parts[0]==='cal'){
-        const [, calendarId, date, start] = parts;
+        let calendarId, ruleId, date, start;
+        if(parts.length>=5){
+          [, calendarId, ruleId, date, start] = parts;
+        } else {
+          // legacy key format (pre rule-id fix) — best effort, will self-migrate to the new format on next save
+          [, calendarId, date, start] = parts;
+          ruleId = null;
+        }
         const cal = calendarsData.find(c=>c.id===calendarId);
-        const rule = calRulesData.find(r=>r.calendarId===calendarId && r.start===start && calRuleMatchesDate(r,date));
+        const rule = ruleId
+          ? calRulesData.find(r=>r.id===ruleId)
+          : calRulesData.find(r=>r.calendarId===calendarId && r.start===start && calRuleMatchesDate(r,date));
+        const active = !!(cal && !cal.hidden && rule && calRuleMatchesDate(rule, date));
         const kid = cal ? (cal.kid || 'both') : 'both';
-        entries.push({isCal:true, calendarId, calName: cal?cal.name:'Календарь', kid, date, start, text:hw.text||'', done:!!hw.done, subject: rule?rule.subject:(hw.subject||''), files: hw.files||[]});
+        entries.push({isCal:true, calendarId, ruleId: rule?rule.id:ruleId, calName: cal?cal.name:'Календарь (удалён)', kid, date, start, text:hw.text||'', done:!!hw.done, subject: hw.subject || (rule?rule.subject:'') || 'Без предмета', files: hw.files||[], orphaned: !active});
       } else {
         const [kid,date,start] = parts;
-        entries.push({kid,date,start,text:hw.text||'',done:!!hw.done,subject:resolvedSubject(kid,date,start),files:hw.files||[]});
+        entries.push({kid,date,start,text:hw.text||'',done:!!hw.done,subject:resolvedSubject(kid,date,start),files:hw.files||[],orphaned:false});
       }
     });
     return entries;
@@ -1310,8 +1421,11 @@
   // ---- reminders / olympiads tab ----
   function renderRemindersTab(){
     const todayStr = iso(startOfDay(new Date()));
-    const olympiads = remindersData.filter(r=>r.type==='olympiad').sort((a,b)=>a.date.localeCompare(b.date));
-    const reminders = remindersData.filter(r=>r.type!=='olympiad').sort((a,b)=>a.date.localeCompare(b.date));
+    const olympiads = remindersData.filter(r=>r.type==='olympiad' && (r.dateEnd||r.date)>=todayStr).sort((a,b)=>a.date.localeCompare(b.date));
+    const reminders = remindersData.filter(r=>r.type!=='olympiad').filter(r=>{
+      const past = (r.dateEnd||r.date) < todayStr;
+      return !(past && r.done); // hide only if overdue AND marked done
+    }).sort((a,b)=>a.date.localeCompare(b.date));
 
     let out = olympiadBannerHtml();
 
@@ -1407,6 +1521,9 @@
           <div class="reminder-date">${dateLabel}</div>
           ${kid?`<span class="kid-tag" style="background:${kid.soft};color:${kid.hex};">${kid.name}</span>`:`<span class="kid-tag" style="background:#eee;color:#555;">Оба</span>`}
           <div class="rtext">🚩 ${escapeHtml(r.text)}</div>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-soft);white-space:nowrap;">
+            <input type="checkbox" data-remdone="${r.id}" ${r.done?'checked':''}> выполнено
+          </label>
           <button class="rdel" data-remdel="${r.id}">✕</button>
         </div>`;
       }).join('')}</div>`;
@@ -1417,26 +1534,13 @@
   // ---- library tab (all homework file attachments) ----
   let libFilterKid = 'all';
 
-  function collectAllFiles(){
-    return collectHomework()
-      .filter(e=> e.files && e.files.length)
-      .flatMap(e=> e.files.filter(f=>!f.uploading && fileUrl(f)).map(f=>({
-        kid: e.kid,
-        calName: e.isCal ? e.calName : null,
-        date: e.date,
-        start: e.start,
-        subject: e.subject || 'Без предмета',
-        key: e.isCal ? calHwKey(e.calendarId,e.date,e.start) : keyOf(e.kid,e.date,e.start),
-        file: f
-      })));
-  }
-
   function renderLibraryTab(){
-    let files = collectAllFiles();
+    let files = fileLibraryData.slice();
     let filtered = libFilterKid==='all' ? files : files.filter(f=> f.kid===libFilterKid || f.kid==='both');
-    filtered.sort((a,b)=> (b.date+b.start).localeCompare(a.date+a.start));
+    filtered.sort((a,b)=> (b.addedAt||0)-(a.addedAt||0));
 
     let out = migrationBannerHtml();
+    out += `<div class="gs-hint">Здесь хранятся все файлы, когда-либо прикреплённые к домашним заданиям — они остаются тут, даже если урок изменили, перенесли или удалили. Их можно заново прикрепить к любому домашнему заданию через «выбрать файл из библиотеки».</div>`;
     out += `<div class="filters"><div class="seg">
       <button data-libkid="all" class="${libFilterKid==='all'?'active':''}">Все</button>
       ${KIDS.map(k=>`<button data-libkid="${k.id}" class="${libFilterKid===k.id?'active':''}">${k.name}</button>`).join('')}
@@ -1449,7 +1553,8 @@
 
     const bySubject = {};
     filtered.forEach(f=>{
-      (bySubject[f.subject] = bySubject[f.subject] || []).push(f);
+      const label = f.subject || 'Без предмета';
+      (bySubject[label] = bySubject[label] || []).push(f);
     });
     out += Object.keys(bySubject).sort().map(subj=>{
       return `<div class="section-title" style="margin-top:18px;">${escapeHtml(subj)}</div>
@@ -1460,17 +1565,18 @@
 
   function libFileCardHtml(f){
     const kidLabel = f.kid==='both' ? 'Оба' : ((KIDS.find(k=>k.id===f.kid)||{}).name || '');
-    const [y,m,d] = f.date.split('-');
-    const dateLabel = d+' '+MONTHS_GEN[parseInt(m,10)-1];
-    const isImg = f.file.type && f.file.type.startsWith('image/');
+    let dateLabel = '';
+    if(f.date){ const [y,m,d] = f.date.split('-'); dateLabel = d+' '+MONTHS_GEN[parseInt(m,10)-1]; }
+    const isImg = f.type && f.type.startsWith('image/');
+    const url = fileUrl(f);
     const preview = isImg
-      ? `<img src="${fileUrl(f.file)}" alt="${escAttr(f.file.name)}">`
+      ? `<img src="${url}" alt="${escAttr(f.name)}">`
       : `<div class="lib-file-icon">📄</div>`;
     return `<div class="lib-card">
-      <a href="${fileUrl(f.file)}" download="${escAttr(f.file.name)}" target="_blank" rel="noopener" class="lib-preview">${preview}</a>
-      <div class="lib-name" title="${escAttr(f.file.name)}">${escapeHtml(f.file.name)}</div>
-      <div class="lib-sub">${escapeHtml(kidLabel)} · ${dateLabel}${f.calName?' · '+escapeHtml(f.calName):''}</div>
-      <button class="rdel" data-libdel="${f.key}|${f.file.id}">✕</button>
+      <a href="${url}" download="${escAttr(f.name)}" target="_blank" rel="noopener" class="lib-preview">${preview}</a>
+      <div class="lib-name" title="${escAttr(f.name)}">${escapeHtml(f.name)}</div>
+      <div class="lib-sub">${escapeHtml(kidLabel)}${dateLabel?' · '+dateLabel:''}${f.calName?' · '+escapeHtml(f.calName):''}</div>
+      <button class="rdel" data-libdel="${f.id}">✕</button>
     </div>`;
   }
 
@@ -1620,10 +1726,24 @@
 
   function fileUrl(f){ return f.url || f.dataUrl || ''; }
 
-  function fileAttachSectionHtml(files){
+  function fileAttachSectionHtml(files, kidHint){
+    const attachedIds = new Set((files||[]).map(f=>f.id));
+    const libOptions = fileLibraryData
+      .filter(f=> !attachedIds.has(f.id))
+      .filter(f=> !kidHint || f.kid===kidHint || f.kid==='both' || !f.kid)
+      .sort((a,b)=> (b.addedAt||0)-(a.addedAt||0));
+    const libPicker = libOptions.length ? `
+      <div class="m-lib-pick">
+        <select id="m-lib-select">
+          <option value="">— выбрать файл из библиотеки —</option>
+          ${libOptions.map(f=>`<option value="${escAttr(f.id)}">${escapeHtml(f.name)}${f.subject?' · '+escapeHtml(f.subject):''}</option>`).join('')}
+        </select>
+        <button type="button" class="btn secondary" id="m-lib-add">Добавить</button>
+      </div>` : '';
     return `<label class="m-label">Файлы к ДЗ</label>
       <div id="m-files-list" class="m-files-list">${filesListInnerHtml(files)}</div>
-      <label class="m-file-attach-label">📎 Прикрепить файл<input type="file" id="m-file-input" multiple style="display:none;"></label>`;
+      <label class="m-file-attach-label">📎 Прикрепить новый файл<input type="file" id="m-file-input" multiple style="display:none;"></label>
+      ${libPicker}`;
   }
 
   function filesListInnerHtml(files){
@@ -1670,6 +1790,23 @@
     if(f && f.storage==='supabase' && f.path && sb){
       sb.storage.from(FILES_BUCKET).remove([f.path]).catch(()=>{});
     }
+  }
+
+  // permanent, independent record of every uploaded homework file — kept even after
+  // the homework entry that first attached it is edited, moved, or deleted, so files
+  // stay available in the Library and can be re-attached to another (e.g. rescheduled) lesson
+  function registerFileInLibrary(f, meta){
+    if(!f || f.uploading || !fileUrl(f)) return;
+    if(fileLibraryData.some(x=>x.id===f.id)) return;
+    fileLibraryData.push({
+      id:f.id, name:f.name, type:f.type||'', size:f.size,
+      url:f.url||null, path:f.path||null, dataUrl:f.dataUrl||null, storage:f.storage||'',
+      kid: (meta&&meta.kid)||'', subject: (meta&&meta.subject)||'', calName: (meta&&meta.calName)||null,
+      date: (meta&&meta.date)||'', start: (meta&&meta.start)||'', addedAt: Date.now()
+    });
+  }
+  function registerFilesInLibrary(files, meta){
+    (files||[]).forEach(f=>registerFileInLibrary(f, meta));
   }
 
   function dataUrlToBlob(dataUrl){
@@ -1744,9 +1881,25 @@
           const removed = fileState.files.find(f=>f.id===btn.dataset.fid);
           fileState.files = fileState.files.filter(f=>f.id!==btn.dataset.fid);
           refresh();
-          if(removed) removeFileFromStorage(removed);
+          // a file already registered in the permanent Library is only detached from
+          // this homework entry (it stays available in the Library / other lessons);
+          // only a brand-new upload from this same editing session (never saved anywhere
+          // yet) is actually deleted from storage when removed.
+          if(removed && !fileLibraryData.some(x=>x.id===removed.id)) removeFileFromStorage(removed);
         };
       });
+      const libAddBtn = document.getElementById('m-lib-add');
+      const libSelect = document.getElementById('m-lib-select');
+      if(libAddBtn && libSelect){
+        libAddBtn.onclick = ()=>{
+          const id = libSelect.value;
+          if(!id) return;
+          const entry = fileLibraryData.find(f=>f.id===id);
+          if(!entry || fileState.files.some(f=>f.id===id)) return;
+          fileState.files.push({id:entry.id, name:entry.name, type:entry.type, size:entry.size, url:entry.url, path:entry.path, dataUrl:entry.dataUrl, storage:entry.storage});
+          refresh();
+        };
+      }
     }
     refresh();
     inputEl.onchange = async ()=>{
@@ -1785,7 +1938,7 @@
   // this modal session but never actually got saved (user hit "Закрыть"/cancel)
   function closeModalCleaningUpFiles(fileState, originalFiles){
     const originalIds = new Set((originalFiles||[]).map(f=>f.id));
-    const orphaned = (fileState.files||[]).filter(f=>f.storage==='supabase' && !originalIds.has(f.id));
+    const orphaned = (fileState.files||[]).filter(f=> f.storage==='supabase' && !originalIds.has(f.id) && !fileLibraryData.some(x=>x.id===f.id));
     closeModal();
     orphaned.forEach(removeFileFromStorage);
   }
@@ -1821,7 +1974,7 @@
       <label class="m-label">Домашнее задание</label>
       <textarea id="m-text" placeholder="Домашнее задание…">${escapeHtml(hw.text)}</textarea>
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
-      ${fileAttachSectionHtml(hw.files||[])}
+      ${fileAttachSectionHtml(hw.files||[], kid)}
       ${(!custom)?`<div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Если поменяли предмет — выберите, применить изменение только к этому дню или ко всем таким же урокам начиная с этой недели.</div>`:''}
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
@@ -1858,6 +2011,7 @@
         if(homeworkData[key]) { homeworkData[movedKey]=homeworkData[key]; delete homeworkData[key]; }
       }
       const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      registerFilesInLibrary(cleanFiles, {kid, subject:custom.subject, date, start:newStart});
       if(text || cleanFiles.length){ homeworkData[movedKey] = {text, done, subject:custom.subject, files:cleanFiles}; }
       else { delete homeworkData[movedKey]; }
       await persistAll();
@@ -1881,6 +2035,7 @@
         }
       }
       const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      registerFilesInLibrary(cleanFiles, {kid, subject:newSubject||orig, date, start});
       if(text || cleanFiles.length){ homeworkData[key] = {text, done, subject:newSubject||orig, files:cleanFiles}; }
       else { delete homeworkData[key]; }
       await persistAll();
@@ -1900,22 +2055,20 @@
     }
     const delBtn = document.getElementById('m-delete');
     if(delBtn) delBtn.onclick = async ()=>{
-      const oldFiles = (homeworkData[key] && homeworkData[key].files) || [];
+      if(!confirm('Удалить домашнее задание? (файлы останутся в библиотеке)')) return;
       delete homeworkData[key];
       await persistAll();
       closeModal();
       render();
-      oldFiles.forEach(removeFileFromStorage);
     };
     const delLessonBtn = document.getElementById('m-delete-lesson');
     if(delLessonBtn) delLessonBtn.onclick = async ()=>{
-      const oldFiles = (homeworkData[key] && homeworkData[key].files) || [];
+      if(!confirm('Удалить этот урок вместе с домашним заданием? (файлы останутся в библиотеке)')) return;
       customLessonsData = customLessonsData.filter(c=>c.id!==custom.id);
       delete homeworkData[key];
       await persistAll();
       closeModal();
       render();
-      oldFiles.forEach(removeFileFromStorage);
     };
   }
 
@@ -1942,7 +2095,7 @@
       <input type="text" id="m-subject" class="m-subject" placeholder="Например: Английский с репетитором" value="">
       <label class="m-label">Домашнее задание (необязательно)</label>
       <textarea id="m-text" placeholder="Домашнее задание…"></textarea>
-      ${fileAttachSectionHtml([])}
+      ${fileAttachSectionHtml([], kid)}
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Отмена</button>
         <div class="right"><button class="btn" id="m-save">Добавить</button></div>
@@ -1964,6 +2117,7 @@
       const id = Date.now()+'-'+Math.random().toString(36).slice(2,7);
       customLessonsData.push({id, kid:newKid, date:newDate, start, end: end||start, subject});
       const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      registerFilesInLibrary(cleanFiles, {kid:newKid, subject, date:newDate, start});
       if(text || cleanFiles.length){ homeworkData[keyOf(newKid,newDate,start)] = {text, done:false, subject, files:cleanFiles}; }
       await persistAll();
       closeModal();
@@ -1974,9 +2128,9 @@
   function renderCalLessonModal(){
     const {calendarId,date,start,end} = modalState;
     const cal = calendarsData.find(c=>c.id===calendarId) || {name:'Календарь', color:'#888'};
-    const key = calHwKey(calendarId,date,start);
-    const hw = homeworkData[key] || {text:'',done:false,files:[]};
     const rule = calRulesData.find(r=>r.calendarId===calendarId && r.start===start && calRuleMatchesDate(r,date));
+    const key = calHwKey(calendarId,rule?rule.id:null,date,start);
+    const hw = homeworkData[key] || {text:'',done:false,files:[]};
     const subject = rule ? rule.subject : '';
     const dateLabel = fmtDate(date);
     const div = document.createElement('div');
@@ -1988,7 +2142,7 @@
       <label class="m-label">Домашнее задание</label>
       <textarea id="m-text" placeholder="Домашнее задание…">${escapeHtml(hw.text)}</textarea>
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
-      ${fileAttachSectionHtml(hw.files||[])}
+      ${fileAttachSectionHtml(hw.files||[], cal.kid)}
       <div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Чтобы изменить предмет, время или периодичность этого урока — используйте вкладку «Настройка расписания».</div>
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
@@ -2004,6 +2158,7 @@
       const text = document.getElementById('m-text').value.trim();
       const done = document.getElementById('m-done').checked;
       const cleanFiles = fileState.files.filter(f=>!f.uploading);
+      registerFilesInLibrary(cleanFiles, {kid: cal.kid||'both', subject, calName: cal.name, date, start});
       if(text || cleanFiles.length){ homeworkData[key] = {text, done, subject, files:cleanFiles}; } else { delete homeworkData[key]; }
       await persistAll();
       closeModal();
@@ -2119,7 +2274,7 @@
     if(oldLesson) return printCellText(kid, dateStr, oldLesson);
     if(calList && calList.length){
       return calList.map(o=>{
-        const hw = homeworkData[calHwKey(o.calendarId,dateStr,o.start)];
+        const hw = homeworkData[calHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
         const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
         return escapeHtml(o.subject)+flag;
       }).join('<br>');
@@ -2130,7 +2285,7 @@
   function printHomework(kidId){
     const kid = KIDS.find(k=>k.id===kidId);
     const genDate = new Date().toLocaleDateString('ru-RU');
-    let entries = collectHomework().filter(e=> (e.kid===kidId || e.kid==='both') && !e.done);
+    let entries = collectHomework().filter(e=> (e.kid===kidId || e.kid==='both') && !e.done && !e.orphaned);
     entries.sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
     let html = `<h1>Домашние задания — ${kid.name}</h1>
       <div class="p-sub">сформировано ${genDate} · только невыполненные</div>`;
@@ -2192,21 +2347,19 @@
     if(migrateBtn) migrateBtn.onclick = migrateInlineFilesToCloud;
     app.querySelectorAll('[data-libkid]').forEach(el=>el.onclick=()=>{libFilterKid=el.dataset.libkid; render();});
     app.querySelectorAll('[data-libdel]').forEach(el=>el.onclick=async ()=>{
-      if(!confirm('Удалить этот файл?')) return;
-      const raw = el.dataset.libdel;
-      const sep = raw.lastIndexOf('|');
-      const key = raw.slice(0, sep);
-      const fileId = raw.slice(sep+1);
-      const hw = homeworkData[key];
-      let removed = null;
-      if(hw && hw.files){
-        removed = hw.files.find(f=>f.id===fileId);
-        hw.files = hw.files.filter(f=>f.id!==fileId);
-        if(!hwHasContent(hw)) delete homeworkData[key];
-      }
+      if(!confirm('Удалить этот файл из библиотеки навсегда? Он также будет убран из всех домашних заданий, где сейчас прикреплён.')) return;
+      const id = el.dataset.libdel;
+      const removed = fileLibraryData.find(f=>f.id===id);
+      fileLibraryData = fileLibraryData.filter(f=>f.id!==id);
+      Object.values(homeworkData).forEach(hw=>{
+        if(hw && hw.files && hw.files.length){
+          hw.files = hw.files.filter(f=>f.id!==id);
+        }
+      });
+      Object.keys(homeworkData).forEach(k=>{ if(!hwHasContent(homeworkData[k])) delete homeworkData[k]; });
       await persistAll();
-      if(removed) removeFileFromStorage(removed);
       render();
+      if(removed) removeFileFromStorage(removed);
     });
     app.querySelectorAll('[data-hwtoggle]').forEach(el=>el.onclick=async (e)=>{
       e.stopPropagation();
@@ -2226,8 +2379,8 @@
     });
     app.querySelectorAll('[data-hwtoggle-cal]').forEach(el=>el.onclick=async (e)=>{
       e.stopPropagation();
-      const [calendarId,date,start] = el.dataset.hwtoggleCal.split('|');
-      const key = calHwKey(calendarId,date,start);
+      const [calendarId,ruleId,date,start] = el.dataset.hwtoggleCal.split('|');
+      const key = calHwKey(calendarId,ruleId||null,date,start);
       if(homeworkData[key]){
         homeworkData[key].done = !homeworkData[key].done;
         await persistAll();
@@ -2237,6 +2390,14 @@
     app.querySelectorAll('[data-hwedit-cal]').forEach(el=>el.onclick=()=>{
       const [calendarId,date,start,end] = el.dataset.hweditCal.split('|');
       modalState = {calType:'cal', calendarId, date, start, end};
+      render();
+    });
+    app.querySelectorAll('[data-hworphandel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить эту запись домашнего задания? Файлы останутся в библиотеке.')) return;
+      const [calendarId,ruleId,date,start] = el.dataset.hworphandel.split('|');
+      const key = calHwKey(calendarId,ruleId||null,date,start);
+      delete homeworkData[key];
+      await persistAll();
       render();
     });
     // ---- schedule settings tab handlers ----
@@ -2267,26 +2428,23 @@
     });
     const calResetAll = document.getElementById('cal-reset-all');
     if(calResetAll) calResetAll.onclick = async ()=>{
-      if(!confirm('Удалить ВСЕ календари и все их уроки? Связанные домашние задания тоже будут удалены. Действие необратимо.')) return;
+      if(!confirm('Удалить ВСЕ календари и все их уроки? Связанные домашние задания тоже будут удалены (прикреплённые файлы останутся в библиотеке). Действие необратимо.')) return;
       calendarsData = [];
       calRulesData = [];
       calSelectedId = null;
       calRuleEditId = null;
-      const filesToRemove = [];
+      selectedRuleIds = new Set();
       Object.keys(homeworkData).forEach(key=>{
-        if(key.startsWith('cal|')){
-          (homeworkData[key].files||[]).forEach(f=>filesToRemove.push(f));
-          delete homeworkData[key];
-        }
+        if(key.startsWith('cal|')) delete homeworkData[key];
       });
       await persistAll();
       render();
-      filesToRemove.forEach(removeFileFromStorage);
     };
     app.querySelectorAll('[data-calselect]').forEach(el=>el.onclick=()=>{
       const id = el.dataset.calselect;
       calSelectedId = (calSelectedId===id) ? null : id;
       calRuleEditId = null;
+      selectedRuleIds = new Set();
       render();
     });
     app.querySelectorAll('[data-caldel]').forEach(el=>el.onclick=async ()=>{
@@ -2344,11 +2502,47 @@
     if(crCancel) crCancel.onclick = ()=>{ calRuleEditId = null; render(); };
     app.querySelectorAll('[data-credit]').forEach(el=>el.onclick=()=>{ calRuleEditId = el.dataset.credit; render(); });
     app.querySelectorAll('[data-crdel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить этот урок из расписания?')) return;
       calRulesData = calRulesData.filter(r=>r.id!==el.dataset.crdel);
       if(calRuleEditId===el.dataset.crdel) calRuleEditId = null;
+      selectedRuleIds.delete(el.dataset.crdel);
       await persistAll();
       render();
     });
+    // ---- multi-select bulk editing of calendar rules ----
+    app.querySelectorAll('[data-ruleselect]').forEach(el=>el.onchange=()=>{
+      const id = el.dataset.ruleselect;
+      if(el.checked) selectedRuleIds.add(id); else selectedRuleIds.delete(id);
+      render();
+    });
+    const crSelectAll = document.getElementById('cr-selectall');
+    if(crSelectAll) crSelectAll.onchange = ()=>{
+      const rules = calRulesData.filter(r=>r.calendarId===calSelectedId);
+      if(crSelectAll.checked) rules.forEach(r=>selectedRuleIds.add(r.id));
+      else rules.forEach(r=>selectedRuleIds.delete(r.id));
+      render();
+    };
+    const crBulkClear = document.getElementById('cr-bulk-clear');
+    if(crBulkClear) crBulkClear.onclick = ()=>{ selectedRuleIds = new Set(); render(); };
+    const crBulkApply = document.getElementById('cr-bulk-apply');
+    if(crBulkApply) crBulkApply.onclick = async ()=>{
+      const until = document.getElementById('cr-bulk-until').value;
+      if(!until){ alert('Укажите дату окончания периодичности.'); return; }
+      const ids = Array.from(selectedRuleIds);
+      if(!confirm('Установить окончание периодичности «'+fmtDate(until)+'» для выбранных уроков ('+ids.length+')?')) return;
+      calRulesData.forEach(r=>{ if(selectedRuleIds.has(r.id)) r.until = until; });
+      await persistAll();
+      render();
+    };
+    const crBulkDelete = document.getElementById('cr-bulk-delete');
+    if(crBulkDelete) crBulkDelete.onclick = async ()=>{
+      const ids = Array.from(selectedRuleIds);
+      if(!confirm('Удалить выбранные уроки ('+ids.length+') из расписания?')) return;
+      calRulesData = calRulesData.filter(r=>!selectedRuleIds.has(r.id));
+      selectedRuleIds = new Set();
+      await persistAll();
+      render();
+    };
     const remPeriod = document.getElementById('rem-period');
     if(remPeriod){
       const toggleRemEnd = ()=>{
@@ -2394,8 +2588,17 @@
       render();
     };
     app.querySelectorAll('[data-remdel]').forEach(el=>el.onclick=async ()=>{
-      remindersData = remindersData.filter(r=>r.id!==el.dataset.remdel);
+      const id = el.dataset.remdel;
+      const rec = remindersData.find(r=>r.id===id);
+      const label = rec && rec.type==='olympiad' ? 'олимпиаду' : 'напоминание';
+      if(!confirm('Удалить '+label+'?')) return;
+      remindersData = remindersData.filter(r=>r.id!==id);
       await persistAll();
+      render();
+    });
+    app.querySelectorAll('[data-remdone]').forEach(el=>el.onchange=async ()=>{
+      const rec = remindersData.find(r=>r.id===el.dataset.remdone);
+      if(rec){ rec.done = el.checked; await persistAll(); }
       render();
     });
     const vacAdd = document.getElementById('vac-add');
@@ -2411,6 +2614,7 @@
       render();
     };
     app.querySelectorAll('[data-vacdel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить запись о каникулах?')) return;
       vacationsData = vacationsData.filter(v=>v.id!==el.dataset.vacdel);
       await persistAll();
       render();
@@ -2453,12 +2657,29 @@
       render();
     });
     app.querySelectorAll('[data-gradedel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить эту оценку?')) return;
       const [kid, es, triStr, id] = el.dataset.gradedel.split('|');
       const subject = decSubj(es);
       const tri = parseInt(triStr,10);
       const list = gradesFor(kid, subject, tri);
       const idx = list.findIndex(x=>x.id===id);
       if(idx>=0) list.splice(idx,1);
+      await persistAll();
+      render();
+    });
+    app.querySelectorAll('[data-subjdel]').forEach(el=>el.onclick=async ()=>{
+      const [kid, es] = el.dataset.subjdel.split('|');
+      const subject = decSubj(es);
+      if(!confirm('Убрать предмет «'+subject+'» из оценивания? Уже выставленные оценки не удаляются и сохранятся, предмет можно будет вернуть позже.')) return;
+      if(!excludedSubjectsData[kid]) excludedSubjectsData[kid] = [];
+      if(!excludedSubjectsData[kid].includes(subject)) excludedSubjectsData[kid].push(subject);
+      await persistAll();
+      render();
+    });
+    app.querySelectorAll('[data-subjrestore]').forEach(el=>el.onclick=async ()=>{
+      const [kid, es] = el.dataset.subjrestore.split('|');
+      const subject = decSubj(es);
+      excludedSubjectsData[kid] = (excludedSubjectsData[kid]||[]).filter(s=>s!==subject);
       await persistAll();
       render();
     });
@@ -2488,6 +2709,7 @@
       if(doc) (doc.files||[]).forEach(removeFileFromStorage);
     });
     app.querySelectorAll('[data-docfiledel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить этот файл?')) return;
       const [docId, fileId] = el.dataset.docfiledel.split('|');
       const doc = documentsData.find(d=>d.id===docId);
       if(doc){
@@ -2509,6 +2731,7 @@
       render();
     };
     app.querySelectorAll('[data-linkdel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить эту ссылку?')) return;
       linksData = linksData.filter(l=>l.id!==el.dataset.linkdel);
       await persistAll();
       render();

@@ -259,6 +259,17 @@
   .bulk-bar input[type=date]{font-family:inherit;font-size:12.5px;padding:5px 7px;border:1px solid var(--paper-line);border-radius:6px;}
   .bulk-count{font-weight:700;}
   .reminder-item .cr-select{margin-right:2px;}
+  .overlap-warning{background:#fdecec;border:1px solid #e6b3b3;color:#8a2e2e;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12.5px;}
+  .reminder-item.rule-overlap{background:#fdecec;border:1px solid #e6b3b3;border-radius:8px;}
+  .dup-warning{background:#fff8ec;border:1px solid #e6cfa3;border-radius:10px;padding:12px 14px;margin-bottom:16px;}
+  .dup-warning-title{font-family:'PT Serif',serif;font-weight:700;color:#8a5a13;margin-bottom:4px;}
+  .dup-warning-sub{font-size:12.5px;color:var(--ink-soft);margin-bottom:12px;}
+  .dup-pair{background:#fff;border:1px solid var(--paper-line);border-radius:8px;padding:10px 12px;margin-bottom:8px;}
+  .dup-pair:last-child{margin-bottom:0;}
+  .dup-pair-head{font-weight:700;font-size:13px;margin-bottom:8px;}
+  .dup-options{display:flex;gap:10px;flex-wrap:wrap;}
+  .dup-option{flex:1 1 240px;background:var(--paper);border:1px solid var(--paper-line);border-radius:7px;padding:8px 10px;display:flex;flex-direction:column;gap:8px;justify-content:space-between;}
+  .dup-option-text{font-size:13px;}
   .flag-icon{color:var(--margin);}
   .countdown{font-size:11.5px;color:var(--gold);font-weight:700;}
 
@@ -445,7 +456,15 @@
     return icsHolidayFor(kid,dateStr) || customVacationFor(kid,dateStr);
   }
   function remOccursOn(r, dateStr){
-    return dateStr>=r.date && dateStr<=(r.dateEnd||r.date);
+    if(!(dateStr>=r.date && dateStr<=(r.dateEnd||r.date))) return false;
+    // keep the schedule view consistent with the Reminders tab: a completed olympiad
+    // hides once its date has passed, and a reminder hides only once it's both
+    // overdue AND checked off as done (an unfinished overdue reminder keeps showing,
+    // since it may still need doing)
+    const todayStr = iso(startOfDay(new Date()));
+    if(r.type==='olympiad') return (r.dateEnd||r.date) >= todayStr;
+    const past = (r.dateEnd||r.date) < todayStr;
+    return !(past && r.done);
   }
   function remindersFor(kid, dateStr, type){
     return remindersData.filter(r=> remOccursOn(r,dateStr) && (type?r.type===type:true) && (r.kid==='both'||r.kid===kid));
@@ -472,6 +491,36 @@
     if(rule.repeat==='weekly') return dow===dowOf(rule.date);
     if(rule.repeat==='weekdays') return (rule.weekdays||[]).includes(dow);
     return false;
+  }
+  function addDaysStr(dateStr, n){ return iso(addDays(new Date(dateStr+'T00:00:00'), n)); }
+  // two rules "overlap" if there is at least one real calendar date where BOTH of them
+  // would generate a lesson at the same time — this is how a subject ends up saved
+  // under two different homework records that look like duplicates of each other.
+  function rulesOverlap(r1, r2){
+    if(r1.id===r2.id || r1.calendarId!==r2.calendarId || r1.start!==r2.start) return false;
+    const FAR = '9999-12-31';
+    const r1End = r1.until || FAR, r2End = r2.until || FAR;
+    if(r1.date > r2End || r2.date > r1End) return false;
+    const rangeStart = r1.date > r2.date ? r1.date : r2.date;
+    let rangeEnd = r1End < r2End ? r1End : r2End;
+    if(rangeEnd===FAR) rangeEnd = addDaysStr(rangeStart, 60); // bounded scan for open-ended rules
+    let d = rangeStart, guard = 0;
+    while(d <= rangeEnd && guard < 400){
+      if(calRuleMatchesDate(r1,d) && calRuleMatchesDate(r2,d)) return true;
+      d = addDaysStr(d,1);
+      guard++;
+    }
+    return false;
+  }
+  function overlappingRuleIdsForCalendar(calendarId){
+    const rules = calRulesData.filter(r=>r.calendarId===calendarId);
+    const bad = new Set();
+    for(let i=0;i<rules.length;i++){
+      for(let j=i+1;j<rules.length;j++){
+        if(rulesOverlap(rules[i], rules[j])){ bad.add(rules[i].id); bad.add(rules[j].id); }
+      }
+    }
+    return bad;
   }
   function calOccurrencesForDate(dateStr){
     const out = [];
@@ -516,6 +565,36 @@
     // falls back to the legacy (pre-fix) key shape when no rule id is known, so existing
     // saved data keeps resolving correctly until it's next edited and re-saved.
     return ruleId ? ('cal|'+calendarId+'|'+ruleId+'|'+dateStr+'|'+start) : ('cal|'+calendarId+'|'+dateStr+'|'+start);
+  }
+  // resolves the actual homeworkData key for an existing entry, checking the modern
+  // (rule-id-aware) key first and falling back to the legacy key shape — needed because
+  // data saved before the rule-id fix has no rule id in its key, but a rule may still be
+  // found for it by other means (e.g. it currently matches the date), which would
+  // otherwise cause toggle/delete actions to silently miss the entry.
+  function resolveHwKey(calendarId, ruleId, dateStr, start){
+    const preferred = calHwKey(calendarId, ruleId, dateStr, start);
+    if(homeworkData[preferred] !== undefined) return preferred;
+    const legacy = calHwKey(calendarId, null, dateStr, start);
+    if(homeworkData[legacy] !== undefined) return legacy;
+    return preferred;
+  }
+  // finds leftover duplicate pairs from BEFORE the rule-id key fix: a legacy-format key
+  // (cal|calendarId|date|start) and a modern-format key (cal|calendarId|ruleId|date|start)
+  // that both exist for the exact same calendar/date/time. These are true duplicates —
+  // same lesson, split into two separate stored homework entries — and won't merge
+  // themselves; they need a one-time manual resolution.
+  function findDuplicateHomeworkPairs(){
+    const keys = Object.keys(homeworkData);
+    const pairs = [];
+    keys.forEach(k=>{
+      const parts = k.split('|');
+      if(parts[0]!=='cal' || parts.length!==4) return; // legacy shape only
+      const [, calendarId, date, start] = parts;
+      const modernSuffix = '|'+date+'|'+start;
+      const modernMatch = keys.find(k2=> k2!==k && k2.startsWith('cal|'+calendarId+'|') && k2.split('|').length===5 && k2.endsWith(modernSuffix));
+      if(modernMatch) pairs.push({legacyKey:k, modernKey:modernMatch, calendarId, date, start});
+    });
+    return pairs;
   }
   function fmtDate(dateStr){
     const [y,m,d] = dateStr.split('-');
@@ -937,7 +1016,7 @@
     if(oldLesson) return lessonCellHtml(kid, dateStr, oldLesson);
     if(calList && calList.length){
       return `<td>${calList.map(o=>{
-        const hw = homeworkData[calHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
+        const hw = homeworkData[resolveHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
         const flag = hwHasContent(hw) ? (hw.done?'✅':'📝') : '';
         return `<div class="cell-lesson" style="border-left:3px solid ${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">
           <span class="cell-subject">${escapeHtml(o.subject)}</span>
@@ -957,7 +1036,7 @@
     }
     if(calList && calList.length){
       const items = calList.map(o=>{
-        const hw = homeworkData[calHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
+        const hw = homeworkData[resolveHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
         const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
         return `<span class="wd-cell" style="background:${o.color}22;color:${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">${escapeHtml(o.subject)}${flag}</span>`;
       }).join('');
@@ -1170,6 +1249,10 @@
     if(rules.length===0){
       out += `<div class="empty-state">Уроков в этом календаре пока нет.</div>`;
     } else {
+      const overlapping = overlappingRuleIdsForCalendar(calSelectedId);
+      if(overlapping.size>0){
+        out += `<div class="overlap-warning">⚠ Найдены уроки, которые накладываются друг на друга (одна и та же дата и время сразу у двух записей) — они помечены ниже красным. Из-за этого урок в расписании и домашнее задание к нему могут задваиваться. Обычно нужно удалить один из них или указать «Окончание периодичности» одному из них, чтобы они не пересекались.</div>`;
+      }
       const selectedHere = rules.filter(r=>selectedRuleIds.has(r.id));
       out += `<div class="bulk-bar">
         <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;">
@@ -1181,14 +1264,17 @@
           <button class="btn danger" id="cr-bulk-delete">Удалить выбранные</button>
           <button class="btn secondary" id="cr-bulk-clear">Снять выделение</button>`:''}
       </div>`;
-      out += `<div class="reminder-list">${rules.map(r=>`
-        <div class="reminder-item">
+      out += `<div class="reminder-list">${rules.map(r=>{
+        const isOverlapping = overlapping.has(r.id);
+        return `
+        <div class="reminder-item ${isOverlapping?'rule-overlap':''}">
           <input type="checkbox" class="cr-select" data-ruleselect="${r.id}" ${selectedRuleIds.has(r.id)?'checked':''}>
           <div class="reminder-date">${fmtDate(r.date)}</div>
-          <div class="rtext"><b>${escapeHtml(r.subject)}</b> · ${ruleTimeLabel(r)} · ${repeatLabel(r)} · ${untilLabel(r)}</div>
+          <div class="rtext">${isOverlapping?'<span title="Пересекается с другим уроком">⚠</span> ':''}<b>${escapeHtml(r.subject)}</b> · ${ruleTimeLabel(r)} · ${repeatLabel(r)} · ${untilLabel(r)}</div>
           <button class="btn secondary" data-credit="${r.id}">Изменить</button>
           <button class="rdel" data-crdel="${r.id}">✕</button>
-        </div>`).join('')}</div>`;
+        </div>`;
+      }).join('')}</div>`;
     }
     return out;
   }
@@ -1273,6 +1359,36 @@
 
   let hwFilterStatus = 'pending';
 
+  // one-time cleanup UI for leftover duplicate homework entries left behind by the
+  // pre-fix key format bug — shows both versions of each affected lesson so the
+  // person can pick which text/files to keep instead of us silently guessing
+  function renderDuplicateHomeworkWarning(){
+    const pairs = findDuplicateHomeworkPairs();
+    if(pairs.length===0) return '';
+    return `<div class="dup-warning">
+      <div class="dup-warning-title">⚠ Найдено задвоенных записей домашнего задания: ${pairs.length}</div>
+      <div class="dup-warning-sub">Это старые записи, оставшиеся от одного и того же урока, который до недавнего исправления сохранялся под двумя разными записями. Выберите для каждой пары, какую версию оставить — вторая будет удалена (файлы всё равно останутся в библиотеке).</div>
+      ${pairs.map((p,i)=>{
+        const a = homeworkData[p.legacyKey] || {text:'',done:false,files:[]};
+        const b = homeworkData[p.modernKey] || {text:'',done:false,files:[]};
+        const cal = calendarsData.find(c=>c.id===p.calendarId);
+        return `<div class="dup-pair">
+          <div class="dup-pair-head">${escapeHtml(cal?cal.name:'Календарь')} · ${fmtDate(p.date)} · ${p.start}</div>
+          <div class="dup-options">
+            <div class="dup-option">
+              <div class="dup-option-text">${a.text?escapeHtml(a.text):'<i>(пусто)</i>'}${a.done?' · <b>выполнено</b>':''}${a.files&&a.files.length?' · файлов: '+a.files.length:''}</div>
+              <button class="btn secondary" data-dupkeep="${p.legacyKey}::${p.modernKey}::keepa::${p.calendarId}::${p.date}::${p.start}">Оставить эту версию</button>
+            </div>
+            <div class="dup-option">
+              <div class="dup-option-text">${b.text?escapeHtml(b.text):'<i>(пусто)</i>'}${b.done?' · <b>выполнено</b>':''}${b.files&&b.files.length?' · файлов: '+b.files.length:''}</div>
+              <button class="btn secondary" data-dupkeep="${p.legacyKey}::${p.modernKey}::keepb::${p.calendarId}::${p.date}::${p.start}">Оставить эту версию</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
   function renderHomeworkTab(){
     const todayStr = iso(startOfDay(new Date()));
     let entries = collectHomework().filter(e=>!e.orphaned);
@@ -1285,6 +1401,7 @@
     if(hwFilterStatus==='done') filtered = filtered.filter(e=>e.done);
 
     let out = migrationBannerHtml();
+    out += renderDuplicateHomeworkWarning();
     out += `<div class="filters">
       <div class="seg">
         <button data-hwsrc="all" class="${hwFilterSource==='all'?'active':''}">Все</button>
@@ -2129,8 +2246,8 @@
     const {calendarId,date,start,end} = modalState;
     const cal = calendarsData.find(c=>c.id===calendarId) || {name:'Календарь', color:'#888'};
     const rule = calRulesData.find(r=>r.calendarId===calendarId && r.start===start && calRuleMatchesDate(r,date));
-    const key = calHwKey(calendarId,rule?rule.id:null,date,start);
-    const hw = homeworkData[key] || {text:'',done:false,files:[]};
+    const readKey = resolveHwKey(calendarId,rule?rule.id:null,date,start);
+    const hw = homeworkData[readKey] || {text:'',done:false,files:[]};
     const subject = rule ? rule.subject : '';
     const dateLabel = fmtDate(date);
     const div = document.createElement('div');
@@ -2159,7 +2276,11 @@
       const done = document.getElementById('m-done').checked;
       const cleanFiles = fileState.files.filter(f=>!f.uploading);
       registerFilesInLibrary(cleanFiles, {kid: cal.kid||'both', subject, calName: cal.name, date, start});
-      if(text || cleanFiles.length){ homeworkData[key] = {text, done, subject, files:cleanFiles}; } else { delete homeworkData[key]; }
+      // always write under the modern (rule-id-aware) key, self-migrating any legacy
+      // entry we just read, so editing never leaves a stale duplicate behind
+      const writeKey = calHwKey(calendarId,rule?rule.id:null,date,start);
+      if(readKey!==writeKey) delete homeworkData[readKey];
+      if(text || cleanFiles.length){ homeworkData[writeKey] = {text, done, subject, files:cleanFiles}; } else { delete homeworkData[writeKey]; }
       await persistAll();
       closeModal();
       render();
@@ -2274,7 +2395,7 @@
     if(oldLesson) return printCellText(kid, dateStr, oldLesson);
     if(calList && calList.length){
       return calList.map(o=>{
-        const hw = homeworkData[calHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
+        const hw = homeworkData[resolveHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
         const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
         return escapeHtml(o.subject)+flag;
       }).join('<br>');
@@ -2380,7 +2501,7 @@
     app.querySelectorAll('[data-hwtoggle-cal]').forEach(el=>el.onclick=async (e)=>{
       e.stopPropagation();
       const [calendarId,ruleId,date,start] = el.dataset.hwtoggleCal.split('|');
-      const key = calHwKey(calendarId,ruleId||null,date,start);
+      const key = resolveHwKey(calendarId,ruleId||null,date,start);
       if(homeworkData[key]){
         homeworkData[key].done = !homeworkData[key].done;
         await persistAll();
@@ -2395,8 +2516,24 @@
     app.querySelectorAll('[data-hworphandel]').forEach(el=>el.onclick=async ()=>{
       if(!confirm('Удалить эту запись домашнего задания? Файлы останутся в библиотеке.')) return;
       const [calendarId,ruleId,date,start] = el.dataset.hworphandel.split('|');
-      const key = calHwKey(calendarId,ruleId||null,date,start);
+      const key = resolveHwKey(calendarId,ruleId||null,date,start);
       delete homeworkData[key];
+      await persistAll();
+      render();
+    });
+    app.querySelectorAll('[data-dupkeep]').forEach(el=>el.onclick=async ()=>{
+      const [legacyKey, modernKey, which, calendarId, date, start] = el.dataset.dupkeep.split('::');
+      const keepKey = which==='keepa' ? legacyKey : modernKey;
+      if(!confirm('Удалить вторую версию этой записи? Файлы из неё останутся в библиотеке, но перестанут быть прикреплены к домашнему заданию.')) return;
+      const kept = homeworkData[keepKey];
+      delete homeworkData[legacyKey];
+      delete homeworkData[modernKey];
+      if(kept){
+        // always store the resolved version under the current, correct key going forward
+        const rule = calRulesData.find(r=>r.calendarId===calendarId && r.start===start && calRuleMatchesDate(r,date));
+        const finalKey = calHwKey(calendarId, rule?rule.id:null, date, start);
+        homeworkData[finalKey] = kept;
+      }
       await persistAll();
       render();
     });

@@ -287,6 +287,9 @@
   .sg{display:inline-block;font-family:'PT Serif',Georgia,serif;font-weight:700;font-size:.95em;line-height:1.25;background:var(--gold-soft);color:#7a5613;border:1px solid var(--gold);border-radius:5px;padding:0 4px;margin-left:0;white-space:nowrap;vertical-align:baseline;}
   .sg sup{font-size:.65em;font-weight:400;margin-left:1px;}
   .sg.nocount{background:#e9edf3;color:#4a5a73;border:1px dashed #7d8ca3;font-weight:400;font-style:italic;}
+  .gs-grade{padding:0 10px 0 0;}
+  .gs-grade:hover{background:transparent;}
+  .gs-add-inline .gs-add-date{font-family:inherit;font-size:11.5px;border:none;background:transparent;color:var(--ink-soft);padding:0;width:104px;}
   .gm-row{display:flex;gap:8px;}
   .gm-row .field{flex:1;}
   .gm-row input{width:100%;font-family:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--paper-line);border-radius:7px;background:#fff;color:var(--ink);}
@@ -1153,6 +1156,27 @@
     return parts.map(escapeHtml).join(' · ');
   }
 
+  // first lesson of the given subject for a kid on a date (start time) — a grade that was
+  // entered on the "Оценки" tab with just a date is shown on that lesson in the schedule
+  function firstLessonStartFor(kid, subject, dateStr){
+    const sj = (subject||'').trim();
+    const starts = [];
+    (lessonsByKidDate[kid][dateStr]||[]).forEach(l=>{ if((resolvedSubject(kid,dateStr,l.start)||'').trim()===sj) starts.push(l.start); });
+    customLessonsFor(kid,dateStr).forEach(c=>{ if((c.subject||'').trim()===sj) starts.push(c.start); });
+    calOccurrencesForDate(dateStr).forEach(o=>{
+      if(o.kid!==kid || (o.subject||'').trim()!==sj) return;
+      const cal = calendarsData.find(c=>c.id===o.calendarId);
+      if(isLyceumCalendarForKid(cal, kid)) starts.push(o.start);
+    });
+    starts.sort();
+    return starts.length ? starts[0] : null;
+  }
+  function gradeBelongsToLesson(g, kid, subject, dateStr, start){
+    if(!g.date || g.date!==dateStr) return false;
+    if(g.start) return g.start===start;
+    return firstLessonStartFor(kid, subject, dateStr)===start;
+  }
+
   // grades entered from the schedule for one lesson, as small badges, e.g. [5/4²]
   function lessonGradeBadgesHtml(kid, subject, dateStr, start){
     if(kid!=='petya' && kid!=='fedya') return '';
@@ -1161,7 +1185,7 @@
     let out = '';
     [1,2,3].forEach(tri=>{
       gradesFor(kid, sj, tri).forEach(g=>{
-        if(g.src!=='schedule' || g.date!==dateStr || g.start!==start) return;
+        if(!gradeBelongsToLesson(g, kid, sj, dateStr, start)) return;
         const w = Number(g.weight)||1;
         out += `<span class="sg ${g.noCount?'nocount':''}" title="Оценка: ${escAttr(gradeLabel(g))}, коэффициент ${w}${g.noCount?' · не учитывается в триместровой':''}">${escapeHtml(gradeLabel(g))}${w!==1?`<sup>${w}</sup>`:''}</span>`;
       });
@@ -1464,6 +1488,8 @@
     let out = `<div class="grades-toolbar">
       <div class="seg">${KIDS.map(k=>`<button data-gradekid="${k.id}" class="${gradesKid===k.id?'active':''}">${k.name}</button>`).join('')}</div>
       <div class="seg">${[1,2,3].map(t=>`<button data-gradetri="${t}" class="${gradesTri===t?'active':''}">${t}-й триместр</button>`).join('')}</div>
+      <span class="spacer"></span>
+      ${(()=>{ let n=0; subjects.forEach(sj=>{ n += gradesFor(gradesKid, sj, gradesTri).length; }); return n>0 ? `<button class="btn secondary" id="grades-clear" style="color:var(--warn);border-color:var(--warn);">Удалить все оценки (${n})</button>` : ''; })()}
     </div>
     <div class="gs-legend"><span class="gs-chip"><span class="gs-chip-val">5</span><sup>1</sup></span> учитывается в среднем <span class="gs-chip nocount"><span class="gs-chip-val">5</span><sup>1</sup></span> не учитывается в триместровой оценке (серо-синяя, пунктир)</div>
     <div class="gs-hint">Оценка показана числом, коэффициент — маленькой цифрой сверху (например 4² = оценка 4 с коэффициентом 2). Нажмите на оценку, чтобы увидеть дату, изменить её или удалить. Оценки можно ставить прямо в расписании — в окне урока. Запись вида 5/4 отображается как есть, а в средний балл идёт как две оценки (5 и 4), каждая с коэффициентом. Средний балл считается с учётом коэффициентов. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл стал строго больше 4,5. Оценки, которые выставляются, но не идут в триместровую, отмечаются галочкой «не в ср.» (или «Не учитывать…» в окне оценки и в расписании) — они подсвечиваются и не влияют на средний балл. Кнопкой 🗑 у предмета можно убрать его из оценивания, если по нему оценки не ставятся.</div>`;
@@ -1493,11 +1519,12 @@
         return `<tr>
           <td class="gt-subject">${escapeHtml(subject)}</td>
           <td class="gt-grades"><div class="gs-grades">
-            ${list.map(g=>`<button type="button" class="gs-chip ${g.date?'':'nodate'} ${g.noCount?'nocount':''}" data-gradeopen="${gradesKid}|${es}|${gradesTri}|${g.id}" title="${(g.date?escAttr(fmtDate(g.date)):'Дата не указана — нажмите, чтобы указать')+(g.noCount?' · не учитывается в среднем':'')}"><span class="gs-chip-val">${escapeHtml(gradeLabel(g))}</span><sup>${escapeHtml(String(g.weight))}</sup></button>`).join('')}
+            ${list.map(g=>`<span class="gs-grade"><button type="button" class="gs-chip ${g.date?'':'nodate'} ${g.noCount?'nocount':''}" data-gradeopen="${gradesKid}|${es}|${gradesTri}|${g.id}" title="${(g.date?escAttr(fmtDate(g.date)):'Дата не указана — нажмите, чтобы указать')+(g.noCount?' · не учитывается в среднем':'')}"><span class="gs-chip-val">${escapeHtml(gradeLabel(g))}</span><sup>${escapeHtml(String(g.weight))}</sup></button><button class="gs-del" data-gradedel="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Удалить оценку">✕</button></span>`).join('')}
             <span class="gs-add-inline" title="Добавить оценку">
               <input type="text" inputmode="numeric" maxlength="7" class="gs-add-val" placeholder="•" title="Оценка, например 5 или 5/4" id="ga-val-${es}-${gradesTri}">
               <span class="gs-add-x">×</span>
             <input type="number" class="gs-add-w" min="1" step="1" value="1" id="ga-w-${es}-${gradesTri}">
+            <input type="date" class="gs-add-date" id="ga-date-${es}-${gradesTri}" value="${triOfDate(iso(startOfDay(new Date())))===gradesTri?iso(startOfDay(new Date())):''}" title="Дата оценки — по ней оценка попадёт в расписание на урок этого предмета">
             <label class="gs-nc" title="Оценка не пойдёт в триместровую"><input type="checkbox" id="ga-nc-${es}-${gradesTri}">не в ср.</label>
             <button data-gradeadd="${gradesKid}|${es}|${gradesTri}">+</button>
           </span>
@@ -2330,7 +2357,7 @@
     const res = [];
     [1,2,3].forEach(tri=>{
       gradesFor(ctx.kid, sj, tri).forEach(g=>{
-        if(g.src==='schedule' && g.date===ctx.date && g.start===ctx.start) res.push({g,tri});
+        if(gradeBelongsToLesson(g, ctx.kid, sj, ctx.date, ctx.start)) res.push({g,tri});
       });
     });
     return res;
@@ -2423,6 +2450,12 @@
       <div class="m-sub">${kidObj.name} · ${tri}-й триместр</div>
       <div style="font-family:'PT Serif',serif;font-size:34px;font-weight:700;line-height:1.1;">${escapeHtml(gradeLabel(g))}<sup style="font-size:14px;color:var(--ink-soft);margin-left:3px;">×${escapeHtml(String(g.weight))}</sup></div>
       <div style="margin:6px 0 4px;font-size:14px;">📅 Дата оценки: <b>${escapeHtml(dateTxt)}</b>${escapeHtml(lessonTxt)}</div>
+      ${(()=>{
+        if(!g.date) return `<div style="font-size:12px;color:var(--ink-soft);">Укажите дату — тогда оценка появится в расписании на уроке этого предмета в этот день.</div>`;
+        const st = g.start || firstLessonStartFor(kid, subject, g.date);
+        return st ? `<div style="font-size:12px;color:var(--ink-soft);">В расписании: урок «${escapeHtml(subject)}» в ${escapeHtml(st)}.</div>`
+                  : `<div style="font-size:12px;color:var(--warn);">В расписании в этот день нет урока «${escapeHtml(subject)}», поэтому оценка там не показана.</div>`;
+      })()}
       ${g.noCount?`<div style="font-size:12px;color:#4a5a73;background:#e9edf3;border-radius:6px;padding:4px 8px;margin-top:4px;">Эта оценка не учитывается в среднем балле триместра.</div>`:''}
       ${two&&!g.noCount?`<div style="font-size:12px;color:var(--ink-soft);">В средний балл идёт как две оценки: ${escapeHtml(String(g.value))} и ${escapeHtml(String(g.value2))}, каждая с коэффициентом ${escapeHtml(String(g.weight))}.</div>`:''}
       <div class="gm-row" style="margin-top:12px;">
@@ -2450,7 +2483,9 @@
       let w = parseFloat(document.getElementById('gm-w').value);
       if(!isFinite(w) || w<=0) w = 1;
       g.value = parsed.value; g.value2 = parsed.value2; g.weight = w;
-      g.date = document.getElementById('gm-date').value || '';
+      const newDate = document.getElementById('gm-date').value || '';
+      if(newDate!==(g.date||'')){ g.start = ''; g.src = ''; }
+      g.date = newDate;
       g.noCount = document.getElementById('gm-nc').checked;
       await persistAll();
       closeGradeModal();
@@ -3403,13 +3438,36 @@
       const todayStr = iso(startOfDay(new Date()));
       // date is filled in only when the chosen trimester is the current one; otherwise it
       // is left empty (can be set by clicking the grade)
-      const date = triOfDate(todayStr)===tri ? todayStr : '';
+      const dEl = document.getElementById('ga-date-'+es+'-'+tri);
+      const date = dEl ? (dEl.value||'') : '';
       const list = ensureGradesSlot(kid, subject, tri);
       const ncEl = document.getElementById('ga-nc-'+es+'-'+tri);
       list.push({id:'g'+Date.now()+'-'+Math.random().toString(36).slice(2,7), value:parsed.value, value2:parsed.value2, weight, date, noCount: !!(ncEl && ncEl.checked)});
       await persistAll();
       render();
     });
+    app.querySelectorAll('[data-gradedel]').forEach(el=>el.onclick=async (e)=>{
+      e.stopPropagation();
+      if(!confirm('Удалить эту оценку?')) return;
+      const [kid, es, triStr, id] = el.dataset.gradedel.split('|');
+      const list = gradesFor(kid, decSubj(es), parseInt(triStr,10));
+      const idx = list.findIndex(x=>x.id===id);
+      if(idx>=0) list.splice(idx,1);
+      await persistAll();
+      render();
+    });
+    const gradesClear = document.getElementById('grades-clear');
+    if(gradesClear) gradesClear.onclick = async ()=>{
+      const kidObj = KIDS.find(k=>k.id===gradesKid);
+      const excluded = excludedSubjectsData[gradesKid] || [];
+      const subjects = subjectsForKid(gradesKid).filter(x=>!excluded.includes(x));
+      let n = 0; subjects.forEach(sj=>{ n += gradesFor(gradesKid, sj, gradesTri).length; });
+      if(!n) return;
+      if(!confirm('Удалить ВСЕ оценки ('+n+') — '+kidObj.name+', '+gradesTri+'-й триместр? Это нельзя отменить.')) return;
+      subjects.forEach(sj=>{ const l = gradesFor(gradesKid, sj, gradesTri); l.splice(0, l.length); });
+      await persistAll();
+      render();
+    };
     app.querySelectorAll('[data-gradeopen]').forEach(el=>el.onclick=()=>{
       const [kid, es, triStr, id] = el.dataset.gradeopen.split('|');
       openGradeModal(kid, decSubj(es), parseInt(triStr,10), id);

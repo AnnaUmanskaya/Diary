@@ -137,12 +137,14 @@
   .day-table th.col-fedya{color:var(--fedya);}
   .day-table td{padding:5px 8px;border-bottom:1px solid var(--paper-line);vertical-align:middle;}
   .day-table td.time{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--ink-soft);white-space:nowrap;width:88px;}
-  .cell-lesson{cursor:pointer;border-radius:7px;padding:6px 9px;border:1px solid transparent;}
+  .cell-lesson{cursor:pointer;border-radius:7px;padding:6px 9px;border:1px solid transparent;display:flex;align-items:center;gap:8px;}
   .cell-lesson:hover{background:rgba(0,0,0,.035);}
   .cell-lesson.petya{border-left:3px solid var(--petya);}
   .cell-lesson.fedya{border-left:3px solid var(--fedya);}
   .cell-empty{color:var(--paper-line);font-size:12px;padding-left:9px;}
-  .cell-subject{font-size:13.5px;}
+  .cell-subject{font-size:13.5px;flex:1;min-width:0;}
+  .cell-grades{display:flex;gap:4px;flex:none;align-items:center;}
+  .cell-lesson .cell-hw{float:none;flex:none;}
   .cell-hw{float:right;font-size:13px;}
 
   /* week view: 5 mini day-cards in a row */
@@ -156,6 +158,9 @@
   .wd-pair{display:flex;gap:5px;flex:1;min-width:0;}
   .wd-cell{flex:1;min-width:0;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:11.5px;line-height:1.28;white-space:normal;word-break:break-word;box-sizing:border-box;}
   .wd-cell:last-child{margin-bottom:0;}
+  .wd-cell{display:flex;align-items:flex-start;justify-content:space-between;gap:4px;}
+  .wd-name{flex:1;min-width:0;}
+  .wd-grades{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:2px;flex:none;}
   .wd-cell.petya{background:var(--petya-soft);color:var(--petya);}
   .wd-cell.fedya{background:var(--fedya-soft);color:var(--fedya);}
   .wd-cell.empty{background:transparent;color:var(--paper-line);cursor:default;font-size:12px;padding:4px 6px;}
@@ -260,6 +265,40 @@
   .gs-add-inline .gs-add-w{width:14px;font-size:11px;color:var(--ink-soft);}
   .gs-add-inline button{border:none;background:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;}
   .gs-add-inline button:hover{color:var(--ink);}
+  .gs-add-inline input[type=text]{font-family:inherit;font-size:13px;border:none;background:transparent;color:var(--ink);padding:0;text-align:center;}
+  .gs-add-inline .gs-add-val{width:34px;font-weight:700;}
+  /* a grade is a clickable chip: "5/4" with weight as a small superscript */
+  .gs-chip{display:inline-flex;align-items:flex-start;font-family:inherit;background:transparent;border:1px solid transparent;border-radius:6px;padding:2px 7px 2px 5px;cursor:pointer;color:var(--ink);}
+  .gs-chip:hover{background:var(--paper);border-color:var(--paper-line);}
+  .gs-chip .gs-chip-val{font-weight:700;font-size:16px;}
+  .gs-chip sup{font-size:10px;color:var(--ink-soft);margin-left:1px;line-height:1;position:relative;top:-1px;}
+  .gs-chip.nodate .gs-chip-val::after{content:'';display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--gold);margin-left:3px;vertical-align:super;}
+  /* grade that is shown but not counted in the trimester average */
+  .gs-chip.nocount{background:#e9edf3;border:1px dashed #7d8ca3;color:#4a5a73;}
+  .gs-chip.nocount .gs-chip-val{font-weight:400;font-style:italic;}
+  .gs-chip.nocount:hover{background:#dde3ec;}
+  .lg-item.nocount{background:#e9edf3;border:1px dashed #7d8ca3;color:#4a5a73;}
+  .gs-nc{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
+  .gs-nc input{margin:0;}
+  .gs-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--ink-soft);margin:0 0 12px;}
+  .gs-legend .gs-chip{cursor:default;pointer-events:none;padding:1px 7px;}
+  .m-check-nc{display:flex;align-items:center;gap:7px;font-size:13px;margin-top:10px;}
+  /* grade badge shown on a lesson in the schedule */
+  .sg{display:inline-block;font-family:'PT Serif',Georgia,serif;font-weight:700;font-size:.95em;line-height:1.25;background:var(--gold-soft);color:#7a5613;border:1px solid var(--gold);border-radius:5px;padding:0 4px;margin-left:0;white-space:nowrap;vertical-align:baseline;}
+  .sg sup{font-size:.65em;font-weight:400;margin-left:1px;}
+  .sg.nocount{background:#e9edf3;color:#4a5a73;border:1px dashed #7d8ca3;font-weight:400;font-style:italic;}
+  .gm-row{display:flex;gap:8px;}
+  .gm-row .field{flex:1;}
+  .gm-row input{width:100%;font-family:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--paper-line);border-radius:7px;background:#fff;color:var(--ink);}
+  .lg-box{margin-top:14px;border-top:1px dashed var(--paper-line);padding-top:6px;}
+  .lg-list{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px;}
+  .lg-item{display:inline-flex;align-items:center;gap:6px;background:var(--gold-soft);border:1px solid var(--gold);border-radius:8px;padding:3px 8px;font-size:12.5px;color:#7a5613;}
+  .lg-item b{font-family:'PT Serif',serif;font-size:15px;}
+  .lg-item button{border:none;background:none;cursor:pointer;color:#a33;font-size:12px;padding:0;}
+  .lg-add{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+  .lg-add input,.lg-add select{font-family:inherit;font-size:14px;padding:6px 8px;border:1px solid var(--paper-line);border-radius:7px;background:#fff;color:var(--ink);}
+  .lg-add #lg-val{width:84px;font-weight:700;text-align:center;}
+  .lg-add #lg-w{width:56px;}
   .gs-hint{font-size:11px;color:var(--ink-soft);margin:2px 0 14px;}
   .gt-subdel{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:14px;padding:2px 4px;opacity:.55;}
   .gt-subdel:hover{opacity:1;color:var(--warn);}
@@ -754,13 +793,40 @@
     if(!gradesData[kid][subject][tri]) gradesData[kid][subject][tri] = [];
     return gradesData[kid][subject][tri];
   }
+  // ---- grade helpers ----
+  // A grade is {id, value, value2?, weight, date?, start?, src?}. "5/4" is stored as
+  // value=5, value2=4 and counts as TWO grades, each with the grade's weight.
+  const TRI2_START_MONTH = 12; // 2-й триместр: с 1 декабря
+  const TRI3_START_MONTH = 3;  // 3-й триместр: с 1 марта
+  function triOfDate(dateStr){
+    const m = parseInt((dateStr||'').slice(5,7),10);
+    if(!m) return 1;
+    if(m>=9 && m<TRI2_START_MONTH) return 1;
+    if(m>=TRI2_START_MONTH || m<TRI3_START_MONTH) return 2;
+    return 3;
+  }
+  function parseGradeInput(str){
+    const m = String(str||'').trim().match(/^([1-5](?:[.,]\d+)?)\s*(?:[\/\\]\s*([1-5](?:[.,]\d+)?))?$/);
+    if(!m) return null;
+    const num = x=>parseFloat(String(x).replace(',','.'));
+    return {value:num(m[1]), value2: m[2]!=null ? num(m[2]) : null};
+  }
+  function gradeLabel(g){
+    const f = v=>String(v).replace('.',',');
+    return (g.value2!=null && g.value2!=='') ? f(g.value)+'/'+f(g.value2) : f(g.value);
+  }
+  function gradeValues(g){
+    const out = [Number(g.value)];
+    if(g.value2!=null && g.value2!=='') out.push(Number(g.value2));
+    return out.filter(v=>isFinite(v));
+  }
   function trimesterStats(kid,subject,tri){
     const list = gradesFor(kid,subject,tri);
     let sumW=0, sumWV=0;
     list.forEach(g=>{
-      const v = Number(g.value); const w = Number(g.weight)||1;
-      if(!isFinite(v)) return;
-      sumW += w; sumWV += v*w;
+      if(g.noCount) return; // shown on the tab, but not part of the trimester average
+      const w = Number(g.weight)||1;
+      gradeValues(g).forEach(v=>{ sumW += w; sumWV += v*w; });
     });
     if(sumW<=0) return {avg:null, sumW:0, sumWV:0, neededFives:null};
     const avg = sumWV/sumW;
@@ -1087,6 +1153,24 @@
     return parts.map(escapeHtml).join(' · ');
   }
 
+  // grades entered from the schedule for one lesson, as small badges, e.g. [5/4²]
+  function lessonGradeBadgesHtml(kid, subject, dateStr, start){
+    if(kid!=='petya' && kid!=='fedya') return '';
+    const sj = (subject||'').trim();
+    if(!sj || !gradesData[kid] || !gradesData[kid][sj]) return '';
+    let out = '';
+    [1,2,3].forEach(tri=>{
+      gradesFor(kid, sj, tri).forEach(g=>{
+        if(g.src!=='schedule' || g.date!==dateStr || g.start!==start) return;
+        const w = Number(g.weight)||1;
+        out += `<span class="sg ${g.noCount?'nocount':''}" title="Оценка: ${escAttr(gradeLabel(g))}, коэффициент ${w}${g.noCount?' · не учитывается в триместровой':''}">${escapeHtml(gradeLabel(g))}${w!==1?`<sup>${w}</sup>`:''}</span>`;
+      });
+    });
+    return out;
+  }
+
+  function gradesWrapHtml(cls, badges){ return badges ? `<span class="${cls}">${badges}</span>` : ''; }
+
   function lessonCellHtml(kid, dateStr, lesson){
     if(!lesson) return `<td class="cell-empty">—</td>`;
     const subj = resolvedSubject(kid, dateStr, lesson.start);
@@ -1095,6 +1179,7 @@
     return `<td>
       <div class="cell-lesson ${kid}" data-lesson="${kid}|${dateStr}|${lesson.start}|${lesson.end}">
         <span class="cell-subject">${escapeHtml(subj)}</span>
+        ${gradesWrapHtml('cell-grades', lessonGradeBadgesHtml(kid,subj,dateStr,lesson.start))}
         ${flag?`<span class="cell-hw">${flag}</span>`:''}
       </div>
     </td>`;
@@ -1108,6 +1193,7 @@
         const flag = hwHasContent(hw) ? (hw.done?'✅':'📝') : '';
         return `<div class="cell-lesson" style="border-left:3px solid ${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">
           <span class="cell-subject">${escapeHtml(o.subject)}</span>
+          ${gradesWrapHtml('cell-grades', lessonGradeBadgesHtml(o.kid,o.subject,dateStr,o.start))}
           ${flag?`<span class="cell-hw">${flag}</span>`:''}
         </div>`;
       }).join('')}</td>`;
@@ -1120,13 +1206,13 @@
       const subj = resolvedSubject(kid, dateStr, oldLesson.start);
       const hw = homeworkData[keyOf(kid,dateStr,oldLesson.start)];
       const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
-      return `<span class="wd-cell ${kid}" data-lesson="${kid}|${dateStr}|${oldLesson.start}|${oldLesson.end}">${escapeHtml(subj)}${flag}</span>`;
+      return `<span class="wd-cell ${kid}" data-lesson="${kid}|${dateStr}|${oldLesson.start}|${oldLesson.end}"><span class="wd-name">${escapeHtml(subj)}${flag}</span>${gradesWrapHtml('wd-grades', lessonGradeBadgesHtml(kid,subj,dateStr,oldLesson.start))}</span>`;
     }
     if(calList && calList.length){
       const items = calList.map(o=>{
         const hw = homeworkData[resolveHwKey(o.calendarId,o.ruleId,dateStr,o.start)];
         const flag = hwHasContent(hw) ? (hw.done?' ✅':' 📝') : '';
-        return `<span class="wd-cell" style="background:${o.color}22;color:${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}">${escapeHtml(o.subject)}${flag}</span>`;
+        return `<span class="wd-cell" style="background:${o.color}22;color:${o.color};" data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}"><span class="wd-name">${escapeHtml(o.subject)}${flag}</span>${gradesWrapHtml('wd-grades', lessonGradeBadgesHtml(o.kid,o.subject,dateStr,o.start))}</span>`;
       }).join('');
       return calList.length>1 ? `<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">${items}</div>` : items;
     }
@@ -1379,7 +1465,8 @@
       <div class="seg">${KIDS.map(k=>`<button data-gradekid="${k.id}" class="${gradesKid===k.id?'active':''}">${k.name}</button>`).join('')}</div>
       <div class="seg">${[1,2,3].map(t=>`<button data-gradetri="${t}" class="${gradesTri===t?'active':''}">${t}-й триместр</button>`).join('')}</div>
     </div>
-    <div class="gs-hint">Оценка показана числом, вес — маленькой цифрой сверху (например 4² = оценка 4 с весом 2). Оценку и вес можно менять прямо на месте. Средний балл считается с учётом веса. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл стал строго больше 4,5. Кнопкой 🗑 у предмета можно убрать его из оценивания, если по нему оценки не ставятся.</div>`;
+    <div class="gs-legend"><span class="gs-chip"><span class="gs-chip-val">5</span><sup>1</sup></span> учитывается в среднем <span class="gs-chip nocount"><span class="gs-chip-val">5</span><sup>1</sup></span> не учитывается в триместровой оценке (серо-синяя, пунктир)</div>
+    <div class="gs-hint">Оценка показана числом, коэффициент — маленькой цифрой сверху (например 4² = оценка 4 с коэффициентом 2). Нажмите на оценку, чтобы увидеть дату, изменить её или удалить. Оценки можно ставить прямо в расписании — в окне урока. Запись вида 5/4 отображается как есть, а в средний балл идёт как две оценки (5 и 4), каждая с коэффициентом. Средний балл считается с учётом коэффициентов. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл стал строго больше 4,5. Оценки, которые выставляются, но не идут в триместровую, отмечаются галочкой «не в ср.» (или «Не учитывать…» в окне оценки и в расписании) — они подсвечиваются и не влияют на средний балл. Кнопкой 🗑 у предмета можно убрать его из оценивания, если по нему оценки не ставятся.</div>`;
 
     if(subjects.length===0 && excluded.length===0){
       out += `<div class="empty-state">Предметов не найдено. Оценки собираются только из календарей «Петя_Лицей» и «Федя_Лицей» — добавьте туда уроки на вкладке «Настройка расписания».</div>`;
@@ -1406,15 +1493,12 @@
         return `<tr>
           <td class="gt-subject">${escapeHtml(subject)}</td>
           <td class="gt-grades"><div class="gs-grades">
-            ${list.map(g=>`<span class="gs-grade">
-              <input type="number" class="gs-val" min="1" max="5" step="1" value="${escAttr(String(g.value))}" data-gradeval="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Оценка">
-              <input type="number" class="gs-weight" min="1" step="1" value="${escAttr(String(g.weight))}" data-gradeweight="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Вес оценки">
-              <button class="gs-del" data-gradedel="${gradesKid}|${es}|${gradesTri}|${g.id}" title="Удалить оценку">✕</button>
-            </span>`).join('')}
+            ${list.map(g=>`<button type="button" class="gs-chip ${g.date?'':'nodate'} ${g.noCount?'nocount':''}" data-gradeopen="${gradesKid}|${es}|${gradesTri}|${g.id}" title="${(g.date?escAttr(fmtDate(g.date)):'Дата не указана — нажмите, чтобы указать')+(g.noCount?' · не учитывается в среднем':'')}"><span class="gs-chip-val">${escapeHtml(gradeLabel(g))}</span><sup>${escapeHtml(String(g.weight))}</sup></button>`).join('')}
             <span class="gs-add-inline" title="Добавить оценку">
-              <input type="number" class="gs-add-val" min="1" max="5" step="1" placeholder="•" id="ga-val-${es}-${gradesTri}">
+              <input type="text" inputmode="numeric" maxlength="7" class="gs-add-val" placeholder="•" title="Оценка, например 5 или 5/4" id="ga-val-${es}-${gradesTri}">
               <span class="gs-add-x">×</span>
             <input type="number" class="gs-add-w" min="1" step="1" value="1" id="ga-w-${es}-${gradesTri}">
+            <label class="gs-nc" title="Оценка не пойдёт в триместровую"><input type="checkbox" id="ga-nc-${es}-${gradesTri}">не в ср.</label>
             <button data-gradeadd="${gradesKid}|${es}|${gradesTri}">+</button>
           </span>
         </div></td>
@@ -2236,6 +2320,153 @@
     orphaned.forEach(removeFileFromStorage);
   }
 
+  // ---- grades entered from the schedule (lesson modal) ----
+  function gradeEligible(kid, subject){
+    const sj = (subject||'').trim();
+    return !!sj && KIDS.some(k=>k.id===kid) && subjectsForKid(kid).includes(sj) && !(excludedSubjectsData[kid]||[]).includes(sj);
+  }
+  function lessonGradesList(ctx){
+    const sj = ctx.subject.trim();
+    const res = [];
+    [1,2,3].forEach(tri=>{
+      gradesFor(ctx.kid, sj, tri).forEach(g=>{
+        if(g.src==='schedule' && g.date===ctx.date && g.start===ctx.start) res.push({g,tri});
+      });
+    });
+    return res;
+  }
+  function lessonGradesInnerHtml(ctx){
+    const list = lessonGradesList(ctx);
+    if(!list.length) return `<div style="font-size:11.5px;color:var(--ink-soft);">Оценок за этот урок нет</div>`;
+    return list.map(({g,tri})=>`<span class="lg-item ${g.noCount?'nocount':''}" ${g.noCount?'title="Не учитывается в триместровой оценке"':''}><b>${escapeHtml(gradeLabel(g))}</b><span>×${escapeHtml(String(g.weight))} · ${tri}-й трим.${g.noCount?' · не в ср.':''}</span><button type="button" data-lgdel="${g.id}|${tri}" title="Удалить оценку">✕</button></span>`).join('');
+  }
+  function lessonGradeSectionHtml(ctx){
+    if(!gradeEligible(ctx.kid, ctx.subject)) return '';
+    if(ctx.cal && !isLyceumCalendarForKid(ctx.cal, ctx.kid)) return '';
+    const autoTri = triOfDate(ctx.date);
+    return `<div class="lg-box">
+      <label class="m-label">Оценка за урок</label>
+      <div class="lg-list" id="lg-list">${lessonGradesInnerHtml(ctx)}</div>
+      <div class="lg-add">
+        <input type="text" id="lg-val" inputmode="numeric" maxlength="7" placeholder="5 или 5/4" title="Оценка. Через дробь — две оценки за урок, например 5/4">
+        <span style="color:var(--ink-soft);">×</span>
+        <input type="number" id="lg-w" min="1" step="1" value="1" title="Коэффициент (вес)">
+        <select id="lg-tri" title="Триместр">${[1,2,3].map(t=>`<option value="${t}" ${t===autoTri?'selected':''}>${t}-й трим.</option>`).join('')}</select>
+        <button type="button" class="btn gold" id="lg-add">Поставить</button>
+      </div>
+      <label class="m-check-nc"><input type="checkbox" id="lg-nc"> Не учитывать в триместровой оценке</label>
+      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">Оценка сохраняется сразу и попадает на вкладку «Оценки» с датой урока. Запись 5/4 считается как две оценки с указанным коэффициентом.</div>
+    </div>`;
+  }
+  function wireLessonGrades(ctx){
+    const addBtn = document.getElementById('lg-add');
+    if(!addBtn) return;
+    const listEl = document.getElementById('lg-list');
+    const sj = ctx.subject.trim();
+    function refresh(){
+      listEl.innerHTML = lessonGradesInnerHtml(ctx);
+      listEl.querySelectorAll('[data-lgdel]').forEach(btn=>btn.onclick = async ()=>{
+        const [id, triStr] = btn.dataset.lgdel.split('|');
+        const list = gradesFor(ctx.kid, sj, parseInt(triStr,10));
+        const idx = list.findIndex(x=>x.id===id);
+        if(idx>=0) list.splice(idx,1);
+        await persistAll();
+        lessonGradesDirty = true;
+        refresh();
+      });
+    }
+    refresh();
+    addBtn.onclick = async ()=>{
+      const valEl = document.getElementById('lg-val');
+      const parsed = parseGradeInput(valEl.value);
+      if(!parsed){ alert('Введите оценку от 1 до 5, например 5 или 5/4.'); return; }
+      let weight = parseFloat(document.getElementById('lg-w').value);
+      if(!isFinite(weight) || weight<=0) weight = 1;
+      const tri = parseInt(document.getElementById('lg-tri').value,10) || triOfDate(ctx.date);
+      ensureGradesSlot(ctx.kid, sj, tri).push({
+        id:'g'+Date.now()+'-'+Math.random().toString(36).slice(2,7),
+        value:parsed.value, value2:parsed.value2, weight,
+        date:ctx.date, start:ctx.start, src:'schedule',
+        noCount: !!document.getElementById('lg-nc').checked
+      });
+      addBtn.disabled = true;
+      await persistAll();
+      addBtn.disabled = false;
+      valEl.value = '';
+      document.getElementById('lg-nc').checked = false;
+      lessonGradesDirty = true;
+      refresh();
+    };
+  }
+
+  // ---- grade details modal (opened by clicking a grade on the "Оценки" tab) ----
+  let gradeModalState = null; // {kid, subject, tri, id}
+  function closeGradeModal(){
+    gradeModalState = null;
+    const b = document.getElementById('grade-modal-backdrop');
+    if(b) b.remove();
+  }
+  function openGradeModal(kid, subject, tri, id){
+    const g = gradesFor(kid, subject, tri).find(x=>x.id===id);
+    if(!g) return;
+    closeGradeModal();
+    gradeModalState = {kid, subject, tri, id};
+    const kidObj = KIDS.find(k=>k.id===kid);
+    const div = document.createElement('div');
+    div.className = 'modal-backdrop';
+    div.id = 'grade-modal-backdrop';
+    const dateTxt = g.date ? fmtDate(g.date) : 'не указана';
+    const lessonTxt = (g.src==='schedule' && g.start) ? ' · урок в '+g.start : '';
+    const two = (g.value2!=null && g.value2!=='');
+    div.innerHTML = `<div class="modal">
+      <h3 style="color:${kidObj.hex}">${escapeHtml(subject)}</h3>
+      <div class="m-sub">${kidObj.name} · ${tri}-й триместр</div>
+      <div style="font-family:'PT Serif',serif;font-size:34px;font-weight:700;line-height:1.1;">${escapeHtml(gradeLabel(g))}<sup style="font-size:14px;color:var(--ink-soft);margin-left:3px;">×${escapeHtml(String(g.weight))}</sup></div>
+      <div style="margin:6px 0 4px;font-size:14px;">📅 Дата оценки: <b>${escapeHtml(dateTxt)}</b>${escapeHtml(lessonTxt)}</div>
+      ${g.noCount?`<div style="font-size:12px;color:#4a5a73;background:#e9edf3;border-radius:6px;padding:4px 8px;margin-top:4px;">Эта оценка не учитывается в среднем балле триместра.</div>`:''}
+      ${two&&!g.noCount?`<div style="font-size:12px;color:var(--ink-soft);">В средний балл идёт как две оценки: ${escapeHtml(String(g.value))} и ${escapeHtml(String(g.value2))}, каждая с коэффициентом ${escapeHtml(String(g.weight))}.</div>`:''}
+      <div class="gm-row" style="margin-top:12px;">
+        <div class="field" style="flex:1.2;"><label>Оценка</label><input type="text" id="gm-val" inputmode="numeric" maxlength="7" value="${escAttr(gradeLabel(g).replace(',','.'))}"></div>
+        <div class="field"><label>Коэффициент</label><input type="number" id="gm-w" min="1" step="1" value="${escAttr(String(g.weight))}"></div>
+      </div>
+      <div class="gm-row" style="margin-top:8px;">
+        <div class="field"><label>Дата</label><input type="date" id="gm-date" value="${escAttr(g.date||'')}"></div>
+      </div>
+      <label class="m-check-nc"><input type="checkbox" id="gm-nc" ${g.noCount?'checked':''}> Не учитывать в триместровой оценке</label>
+      <div class="m-actions">
+        <button class="btn secondary" id="gm-close">Закрыть</button>
+        <div class="right">
+          <button class="btn danger" id="gm-del">Удалить</button>
+          <button class="btn" id="gm-save">Сохранить</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(div);
+    div.onclick = (e)=>{ if(e.target===div) closeGradeModal(); };
+    document.getElementById('gm-close').onclick = closeGradeModal;
+    document.getElementById('gm-save').onclick = async ()=>{
+      const parsed = parseGradeInput(document.getElementById('gm-val').value);
+      if(!parsed){ alert('Введите оценку от 1 до 5, например 5 или 5/4.'); return; }
+      let w = parseFloat(document.getElementById('gm-w').value);
+      if(!isFinite(w) || w<=0) w = 1;
+      g.value = parsed.value; g.value2 = parsed.value2; g.weight = w;
+      g.date = document.getElementById('gm-date').value || '';
+      g.noCount = document.getElementById('gm-nc').checked;
+      await persistAll();
+      closeGradeModal();
+      render();
+    };
+    document.getElementById('gm-del').onclick = async ()=>{
+      if(!confirm('Удалить эту оценку?')) return;
+      const list = gradesFor(kid, subject, tri);
+      const idx = list.findIndex(x=>x.id===id);
+      if(idx>=0) list.splice(idx,1);
+      await persistAll();
+      closeGradeModal();
+      render();
+    };
+  }
+
   // ---- modal (edit subject + homework) ----
   let modalState = null; // {kid,date,start,end,isNew}
 
@@ -2268,6 +2499,7 @@
       <textarea id="m-text" placeholder="Домашнее задание…">${escapeHtml(hw.text)}</textarea>
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
       ${fileAttachSectionHtml(hw.files||[], kid)}
+      ${lessonGradeSectionHtml({kid,subject:subj,date,start})}
       ${(!custom)?`<div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Если поменяли предмет — выберите, применить изменение только к этому дню или ко всем таким же урокам начиная с этой недели.</div>`:''}
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
@@ -2282,6 +2514,7 @@
     document.body.appendChild(div);
     const fileState = {files: (hw.files||[]).filter(f=>!f.uploading).slice()};
     wireFileAttach(fileState);
+    wireLessonGrades({kid,subject:subj,date,start});
     document.getElementById('m-close').onclick = ()=>closeModalCleaningUpFiles(fileState, hw.files||[]);
     div.onclick = (e)=>{ if(e.target===div) closeModalCleaningUpFiles(fileState, hw.files||[]); };
 
@@ -2436,6 +2669,7 @@
       <textarea id="m-text" placeholder="Домашнее задание…">${escapeHtml(hw.text)}</textarea>
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
       ${fileAttachSectionHtml(hw.files||[], cal.kid)}
+      ${lessonGradeSectionHtml({kid:cal.kid,subject,date,start,cal})}
       <div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Чтобы изменить предмет, время или периодичность этого урока — используйте вкладку «Настройка расписания».</div>
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
@@ -2445,6 +2679,7 @@
     document.body.appendChild(div);
     const fileState = {files: (hw.files||[]).filter(f=>!f.uploading).slice()};
     wireFileAttach(fileState);
+    wireLessonGrades({kid:cal.kid,subject,date,start,cal});
     document.getElementById('m-close').onclick = ()=>closeModalCleaningUpFiles(fileState, hw.files||[]);
     div.onclick = (e)=>{ if(e.target===div) closeModalCleaningUpFiles(fileState, hw.files||[]); };
     document.getElementById('m-save').onclick = async ()=>{
@@ -2463,10 +2698,12 @@
     };
   }
 
+  let lessonGradesDirty = false; // a grade was added/removed in the lesson modal -> redraw the schedule on close
   function closeModal(){
     modalState = null;
     const b = document.getElementById('modal-backdrop');
     if(b) b.remove();
+    if(lessonGradesDirty){ lessonGradesDirty = false; render(); }
   }
 
   // ---- utils ----
@@ -3159,44 +3396,23 @@
       const tri = parseInt(triStr,10);
       const valEl = document.getElementById('ga-val-'+es+'-'+tri);
       const wEl = document.getElementById('ga-w-'+es+'-'+tri);
-      const value = parseFloat(valEl.value);
-      const weight = parseFloat(wEl.value) || 1;
-      if(!isFinite(value) || value<1 || value>5){ alert('Введите оценку от 1 до 5.'); return; }
+      const parsed = parseGradeInput(valEl.value);
+      if(!parsed){ alert('Введите оценку от 1 до 5, например 5 или 5/4.'); return; }
+      let weight = parseFloat(wEl.value);
+      if(!isFinite(weight) || weight<=0) weight = 1;
+      const todayStr = iso(startOfDay(new Date()));
+      // date is filled in only when the chosen trimester is the current one; otherwise it
+      // is left empty (can be set by clicking the grade)
+      const date = triOfDate(todayStr)===tri ? todayStr : '';
       const list = ensureGradesSlot(kid, subject, tri);
-      list.push({id:'g'+Date.now()+'-'+Math.random().toString(36).slice(2,7), value, weight});
+      const ncEl = document.getElementById('ga-nc-'+es+'-'+tri);
+      list.push({id:'g'+Date.now()+'-'+Math.random().toString(36).slice(2,7), value:parsed.value, value2:parsed.value2, weight, date, noCount: !!(ncEl && ncEl.checked)});
       await persistAll();
       render();
     });
-    app.querySelectorAll('[data-gradeval]').forEach(el=>el.onchange=async ()=>{
-      const [kid, es, triStr, id] = el.dataset.gradeval.split('|');
-      const subject = decSubj(es);
-      const tri = parseInt(triStr,10);
-      const list = gradesFor(kid, subject, tri);
-      const g = list.find(x=>x.id===id);
-      const value = parseFloat(el.value);
-      if(g && isFinite(value)){ g.value = Math.min(5, Math.max(1, value)); await persistAll(); }
-      render();
-    });
-    app.querySelectorAll('[data-gradeweight]').forEach(el=>el.onchange=async ()=>{
-      const [kid, es, triStr, id] = el.dataset.gradeweight.split('|');
-      const subject = decSubj(es);
-      const tri = parseInt(triStr,10);
-      const list = gradesFor(kid, subject, tri);
-      const g = list.find(x=>x.id===id);
-      const weight = parseFloat(el.value);
-      if(g){ g.weight = (isFinite(weight) && weight>0) ? weight : 1; await persistAll(); }
-      render();
-    });
-    app.querySelectorAll('[data-gradedel]').forEach(el=>el.onclick=async ()=>{
-      if(!confirm('Удалить эту оценку?')) return;
-      const [kid, es, triStr, id] = el.dataset.gradedel.split('|');
-      const subject = decSubj(es);
-      const tri = parseInt(triStr,10);
-      const list = gradesFor(kid, subject, tri);
-      const idx = list.findIndex(x=>x.id===id);
-      if(idx>=0) list.splice(idx,1);
-      await persistAll();
-      render();
+    app.querySelectorAll('[data-gradeopen]').forEach(el=>el.onclick=()=>{
+      const [kid, es, triStr, id] = el.dataset.gradeopen.split('|');
+      openGradeModal(kid, decSubj(es), parseInt(triStr,10), id);
     });
     app.querySelectorAll('[data-subjdel]').forEach(el=>el.onclick=async ()=>{
       const [kid, es] = el.dataset.subjdel.split('|');

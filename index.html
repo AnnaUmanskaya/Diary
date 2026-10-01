@@ -211,6 +211,19 @@
   .reminder-item .rtext{flex:1;font-size:13.5px;}
   .reminder-item .rdel{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:16px;padding:2px 6px;}
 
+  /* olympiads tab */
+  .ol-summary{font-size:13px;color:var(--ink-soft);margin:0 0 12px;}
+  .ol-card{background:var(--card);border:1px solid var(--paper-line);border-left:4px solid var(--gold);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
+  .ol-card.past{border-left-color:var(--paper-line);}
+  .ol-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .ol-title{flex:1 1 200px;font-family:'PT Serif',serif;font-weight:700;font-size:15px;}
+  .ol-date{font-size:13px;color:var(--ink-soft);}
+  .ol-fields{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+  .ol-fields .field input[type=text]{min-width:0;width:170px;max-width:100%;}
+  .ol-diploma{display:flex;flex-direction:column;gap:2px;}
+  .ol-diploma .m-files-list{margin:0 0 4px;}
+  .ol-diploma .m-file-attach-label{margin-bottom:0;}
+
   /* grades tab */
   .grades-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
   .grades-table{width:100%;border-collapse:collapse;}
@@ -452,6 +465,7 @@
   let gradesTri = 1;
   let documentsData = []; // {id,title,category,note,files:[],createdAt}
   let docFilterCat = 'all';
+  let olKidFilter = 'all'; // filter on the "Олимпиады" tab
   let docDraft = {files:[]}; // staged files for the "add document" form
   let linksData = []; // {id,title,url,note,createdAt}
   let excludedSubjectsData = {petya:[], fedya:[]}; // subjects hidden from grading per kid
@@ -908,6 +922,7 @@
     else if(state.tab==='grades') html += renderGradesTab();
     else if(state.tab==='library') html += renderLibraryTab();
     else if(state.tab==='documents') html += renderDocumentsTab();
+    else if(state.tab==='olympiads') html += renderOlympiadsTab();
     else html += renderRemindersTab();
     app.innerHTML = html;
     attachHandlers();
@@ -924,7 +939,7 @@
   }
 
   function renderTabs(){
-    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады']];
+    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады'],['olympiads','Олимпиады']];
     return `<nav class="tabs">${tabs.map(([id,label])=>
       `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>`;
   }
@@ -1606,6 +1621,94 @@
       }
     });
     return entries;
+  }
+
+  // ---- olympiads tab (results: date, score, place, diploma) ----
+  // Uses the same records as the reminders tab (type:'olympiad'), extended with
+  // score / place / diplomas — so an olympiad added in either tab shows up in both.
+  function olDateLabel(r){
+    const f = s=>{ const [y,m,d]=s.split('-'); return parseInt(d,10)+' '+MONTHS_GEN[parseInt(m,10)-1]+' '+y; };
+    return (r.dateEnd && r.dateEnd!==r.date) ? f(r.date)+' – '+f(r.dateEnd) : f(r.date);
+  }
+
+  function olDiplomasHtml(r){
+    const files = r.diplomas || [];
+    if(!files.length) return `<div style="font-size:11.5px;color:var(--ink-soft);">Диплома нет</div>`;
+    return `<div class="m-files-list">${files.map(f=>{
+      const url = fileUrl(f);
+      const isImg = f.type && f.type.startsWith('image/');
+      const preview = `${isImg?`<img src="${url}">`:'<span class="m-file-icon">📄</span>'}<span class="m-file-name" title="${escAttr(f.name)}">${escapeHtml(f.name)}</span>`;
+      const body = url
+        ? `<a href="${url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:flex;align-items:center;gap:5px;min-width:0;">${preview}</a>`
+        : `<span style="display:flex;align-items:center;gap:5px;min-width:0;color:var(--ink-soft);">${preview}</span>`;
+      return `<div class="m-file-chip">${body}<button type="button" class="m-file-del" data-oldipdel="${r.id}|${f.id}">✕</button></div>`;
+    }).join('')}</div>`;
+  }
+
+  function olCardHtml(r, todayStr){
+    const kid = KIDS.find(k=>k.id===r.kid);
+    const end = r.dateEnd || r.date;
+    const past = end < todayStr;
+    const ongoing = todayStr>=r.date && todayStr<=end;
+    const dleft = daysBetween(todayStr, r.date);
+    const status = ongoing ? 'идёт' : past ? 'прошла' : (dleft===0 ? 'сегодня' : 'через '+dleft+' '+dayWord(dleft));
+    return `<div class="ol-card ${past?'past':''}">
+      <div class="ol-head">
+        ${kid?`<span class="kid-tag" style="background:${kid.soft};color:${kid.hex};">${kid.name}</span>`:`<span class="kid-tag" style="background:#eee;color:#555;">Оба</span>`}
+        <div class="ol-title">🏆 ${escapeHtml(r.text)}</div>
+        <span class="ol-date">📅 ${olDateLabel(r)}</span>
+        <span class="countdown" ${past?'style="color:var(--ink-soft);font-weight:400;"':''}>${status}</span>
+        <button class="rdel" title="Удалить олимпиаду" data-oltdel="${r.id}">✕</button>
+      </div>
+      <div class="ol-fields">
+        <div class="field"><label>Баллы</label><input type="text" data-oltid="${r.id}" data-oltfield="score" value="${escAttr(r.score||'')}" placeholder="например: 85 из 100"></div>
+        <div class="field"><label>Место</label><input type="text" data-oltid="${r.id}" data-oltfield="place" value="${escAttr(r.place||'')}" placeholder="например: 2 место"></div>
+        <div class="field ol-diploma"><label>Диплом</label>
+          ${olDiplomasHtml(r)}
+          <label class="m-file-attach-label">📎 Прикрепить диплом<input type="file" data-oldipinput="${r.id}" multiple style="display:none;"></label>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderOlympiadsTab(){
+    const todayStr = iso(startOfDay(new Date()));
+    const all = remindersData.filter(r=>r.type==='olympiad');
+    const list = all.filter(r=> olKidFilter==='all' || r.kid===olKidFilter);
+    const upcoming = list.filter(r=>(r.dateEnd||r.date)>=todayStr).sort((a,b)=>a.date.localeCompare(b.date));
+    const past = list.filter(r=>(r.dateEnd||r.date)<todayStr).sort((a,b)=>b.date.localeCompare(a.date));
+    const withDiploma = list.filter(r=>(r.diplomas||[]).length>0).length;
+
+    let out = `<div class="section-title">Добавить олимпиаду</div>
+    <div class="reminder-form">
+      <div class="field"><label>Дата</label><input type="date" id="olt-date" value="${todayStr}"></div>
+      <div class="field"><label><input type="checkbox" id="olt-period"> Период</label></div>
+      <div class="field" id="olt-end-field" style="display:none;"><label>По</label><input type="date" id="olt-end" value="${todayStr}"></div>
+      <div class="field"><label>Кто участвует</label><select id="olt-kid">
+        ${KIDS.map(k=>`<option value="${k.id}">${k.name}</option>`).join('')}
+      </select></div>
+      <div class="field" style="flex:1 1 220px;"><label>Название олимпиады</label><input type="text" id="olt-text" placeholder="Например: Олимпиада по математике"></div>
+      <div class="field"><label>Баллы (необязательно)</label><input type="text" id="olt-score" style="min-width:0;width:130px;"></div>
+      <div class="field"><label>Место (необязательно)</label><input type="text" id="olt-place" style="min-width:0;width:130px;"></div>
+      <button class="btn gold" id="olt-add">Добавить</button>
+    </div>
+    <div class="filters"><div class="seg">
+      <button data-olkid="all" class="${olKidFilter==='all'?'active':''}">Все</button>
+      ${KIDS.map(k=>`<button data-olkid="${k.id}" class="${olKidFilter===k.id?'active':''}">${k.name}</button>`).join('')}
+    </div></div>
+    <div class="ol-summary">Олимпиад: ${list.length} · с дипломом: ${withDiploma}</div>`;
+
+    if(list.length===0){
+      out += `<div class="empty-state">Олимпиад пока нет. Олимпиады из вкладки «Напоминания и олимпиады» появятся здесь автоматически, а недостающие можно добавить формой выше.</div>`;
+      return out;
+    }
+    if(upcoming.length){
+      out += `<div class="section-title">Предстоящие</div><div class="reminder-list">${upcoming.map(r=>olCardHtml(r,todayStr)).join('')}</div>`;
+    }
+    if(past.length){
+      out += `<div class="section-title">Прошедшие</div><div class="reminder-list">${past.map(r=>olCardHtml(r,todayStr)).join('')}</div>`;
+    }
+    return out;
   }
 
   // ---- reminders / olympiads tab ----
@@ -2980,6 +3083,73 @@
       await persistAll();
       render();
     });
+    // ---- olympiads tab handlers ----
+    app.querySelectorAll('[data-olkid]').forEach(el=>el.onclick=()=>{ olKidFilter = el.dataset.olkid; render(); });
+    const oltPeriod = document.getElementById('olt-period');
+    if(oltPeriod) oltPeriod.onchange = ()=>{
+      document.getElementById('olt-end-field').style.display = oltPeriod.checked ? '' : 'none';
+    };
+    const oltAdd = document.getElementById('olt-add');
+    if(oltAdd) oltAdd.onclick = async ()=>{
+      const date = document.getElementById('olt-date').value;
+      const isPeriod = document.getElementById('olt-period').checked;
+      let dateEnd = isPeriod ? document.getElementById('olt-end').value : null;
+      if(dateEnd && dateEnd<date) dateEnd = date;
+      const kid = document.getElementById('olt-kid').value;
+      const text = document.getElementById('olt-text').value.trim();
+      const score = document.getElementById('olt-score').value.trim();
+      const place = document.getElementById('olt-place').value.trim();
+      if(!date || !text){ alert('Укажите дату и название олимпиады.'); return; }
+      remindersData.push({id: Date.now()+'-'+Math.random().toString(36).slice(2,7), type:'olympiad', date, dateEnd, kid, text, score, place, diplomas:[]});
+      await persistAll();
+      render();
+    };
+    app.querySelectorAll('[data-oltfield]').forEach(el=>el.onchange=async ()=>{
+      const rec = remindersData.find(r=>r.id===el.dataset.oltid);
+      if(!rec) return;
+      rec[el.dataset.oltfield] = el.value.trim();
+      await persistAll(); // no re-render, so tabbing between fields isn't interrupted
+    });
+    app.querySelectorAll('[data-oltdel]').forEach(el=>el.onclick=async ()=>{
+      const id = el.dataset.oltdel;
+      const rec = remindersData.find(r=>r.id===id);
+      if(!rec) return;
+      if(!confirm('Удалить олимпиаду «'+rec.text+'»? Она также пропадёт из вкладки «Напоминания и олимпиады» и из расписания.')) return;
+      remindersData = remindersData.filter(r=>r.id!==id);
+      await persistAll();
+      render();
+      (rec.diplomas||[]).forEach(removeFileFromStorage);
+    });
+    app.querySelectorAll('[data-oldipinput]').forEach(inp=>inp.onchange=async ()=>{
+      const rec = remindersData.find(r=>r.id===inp.dataset.oldipinput);
+      const chosen = Array.from(inp.files||[]);
+      if(!rec || chosen.length===0) return;
+      inp.disabled = true;
+      if(inp.parentElement) inp.parentElement.style.opacity = '.5';
+      if(!rec.diplomas) rec.diplomas = [];
+      for(const file of chosen){
+        if(file.size > MAX_FILE_SIZE){ alert('Файл «'+file.name+'» слишком большой (макс. 100 МБ).'); continue; }
+        try{
+          rec.diplomas.push(await uploadFileToStorage(file));
+        } catch(err){
+          alert('Не удалось загрузить файл «'+file.name+'»: '+(err&&err.message?err.message:'ошибка загрузки'));
+        }
+      }
+      await persistAll();
+      render();
+    });
+    app.querySelectorAll('[data-oldipdel]').forEach(el=>el.onclick=async ()=>{
+      if(!confirm('Удалить этот файл диплома?')) return;
+      const [rid, fid] = el.dataset.oldipdel.split('|');
+      const rec = remindersData.find(r=>r.id===rid);
+      if(!rec) return;
+      const removed = (rec.diplomas||[]).find(f=>f.id===fid);
+      rec.diplomas = (rec.diplomas||[]).filter(f=>f.id!==fid);
+      await persistAll();
+      render();
+      if(removed) removeFileFromStorage(removed);
+    });
+
     // ---- grades tab handlers ----
     app.querySelectorAll('[data-gradekid]').forEach(el=>el.onclick=()=>{ gradesKid = el.dataset.gradekid; render(); });
     app.querySelectorAll('[data-gradetri]').forEach(el=>el.onclick=()=>{ gradesTri = parseInt(el.dataset.gradetri,10); render(); });

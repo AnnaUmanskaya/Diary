@@ -290,6 +290,34 @@
   .gs-grade{padding:0 10px 0 0;}
   .gs-grade:hover{background:transparent;}
   .gs-add-inline .gs-add-date{font-family:inherit;font-size:11.5px;border:none;background:transparent;color:var(--ink-soft);padding:0;width:104px;}
+  /* schedule laid out on a real-clock scale: hour grid underneath, lessons stretched to their real duration */
+  .ts-body{position:relative;display:flex;gap:6px;
+    background-image:
+      repeating-linear-gradient(to bottom, var(--paper-line) 0, var(--paper-line) 1px, transparent 1px, transparent var(--pph)),
+      repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--pph) / 2), rgba(222,210,180,.55) calc(var(--pph) / 2), rgba(222,210,180,.55) calc(var(--pph) / 2 + 1px), transparent calc(var(--pph) / 2 + 1px), transparent var(--pph));}
+  .ts-gutter{flex:0 0 32px;position:relative;}
+  .ts-body.day .ts-gutter{flex-basis:46px;}
+  .wd-flagbox{display:flow-root;}
+  .ts-hlabel{position:absolute;left:0;font-size:10px;color:var(--ink-soft);font-variant-numeric:tabular-nums;transform:translateY(-50%);background:var(--card);padding:0 2px 0 0;line-height:1.2;}
+  .ts-body.day .ts-hlabel{font-size:11.5px;}
+  .ts-lanes{flex:1;min-width:0;display:flex;gap:5px;}
+  .ts-lane{flex:1;position:relative;min-width:0;height:100%;}
+  .ts-ev{position:absolute;box-sizing:border-box;overflow:hidden;}
+  .wd-cell.ts-ev{flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:1px;line-height:1.2;padding:3px 5px;}
+  .wd-cell.ts-ev .wd-name{flex:none;max-width:100%;}
+  .cell-lesson.ts-ev{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:1px;padding:3px 9px;border-left-width:3px;border-left-style:solid;}
+  .ts-top{display:flex;gap:8px;align-items:flex-start;}
+  .ts-top .cell-subject{flex:1;min-width:0;}
+  .ts-grades{display:flex;flex-wrap:wrap;gap:3px;}
+  .ts-hw{display:block;font-size:12px;line-height:1.2;}
+  .ts-ev:hover{z-index:3;box-shadow:0 2px 10px rgba(38,49,61,.25);}
+  .ts-t{display:block;font-size:10px;opacity:.75;font-weight:400;font-variant-numeric:tabular-nums;}
+  .ts-body.day .ts-t{font-size:11.5px;}
+  .ts-now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--margin);z-index:4;pointer-events:none;}
+  .ts-now::before{content:'';position:absolute;left:-3px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--margin);}
+  .ts-head{display:flex;gap:6px;margin-bottom:6px;font-family:'PT Serif',serif;font-weight:700;font-size:13px;}
+  .ts-head .g{flex:0 0 46px;}
+  .ts-head span.k{flex:1;text-align:center;}
   .gm-row{display:flex;gap:8px;}
   .gm-row .field{flex:1;}
   .gm-row input{width:100%;font-family:inherit;font-size:14px;padding:7px 9px;border:1px solid var(--paper-line);border-radius:7px;background:#fff;color:var(--ink);}
@@ -656,7 +684,7 @@
       const cal = calendarsData.find(c=>c.id===rule.calendarId);
       if(!cal || cal.hidden) return;
       if(!calRuleMatchesDate(rule, dateStr)) return;
-      out.push({ruleId:rule.id, calendarId:cal.id, calName:cal.name, color:cal.color, kid: cal.kid||'both', subject:rule.subject, start:rule.start, end:rule.end});
+      out.push({ruleId:rule.id, calendarId:cal.id, calName:cal.name, color:cal.color, kid: cal.kid||'both', subject:rule.subject, start:rule.start, end:rule.end, timeMode:rule.timeMode, lessonNumber:rule.lessonNumber});
     });
     out.sort((a,b)=> a.start.localeCompare(b.start));
     return out;
@@ -995,6 +1023,7 @@
     else html += renderRemindersTab();
     app.innerHTML = html;
     attachHandlers();
+    if(state.tab==='schedule') fitTimeScale();
     if(modalState) renderModal();
   }
 
@@ -1243,22 +1272,156 @@
     return `<span class="wd-cell empty">—</span>`;
   }
 
+  // ---------- schedule on a real-clock scale ----------
+  // The day/week views keep their usual look, but every lesson is placed by its start time and
+  // stretched to its real duration over an hour grid (the "clock" underlay), so a two-hour
+  // extra class visibly takes two hours.
+  const TS_PPH = {week:48, day:58}; // pixels per hour
+  function durLabel(mins){
+    if(mins<60) return mins+' мин';
+    const h = Math.floor(mins/60), m = mins%60;
+    return h+' ч'+(m?' '+m+' мин':'');
+  }
+  // time is shown only for classes set to "Точное время"; lessons set "По номеру урока" show no time
+  function isExactTime(timeMode, start, end){
+    if(timeMode==='custom') return true;
+    if(timeMode==='lesson') return false;
+    return !LESSON_TIMES.some(l=>l.start===start && l.end===end); // older rules without a mode: guess by the time
+  }
+  function timelineEventsFor(kid, dateStr){
+    const out = [];
+    combinedRowsForDate(dateStr).forEach(r=>{
+      const old = kid==='petya' ? r.petyaOld : r.fedyaOld;
+      const cals = (kid==='petya' ? r.petyaCal : r.fedyaCal) || [];
+      if(old){
+        out.push({kid, start:old.start, end:old.end||'', subject:resolvedSubject(kid, dateStr, old.start), color:null,
+          exact: !!findCustomLesson(kid, dateStr, old.start), // one-off extra classes have a set time; school lessons go by number
+          attr:`data-lesson="${kid}|${dateStr}|${old.start}|${old.end}"`,
+          hw:homeworkData[keyOf(kid,dateStr,old.start)], gradeKid:kid});
+      }
+      cals.forEach(o=>{
+        out.push({kid, start:o.start, end:o.end||'', subject:o.subject, color:o.color,
+          exact: isExactTime(o.timeMode, o.start, o.end),
+          attr:`data-callesson="${o.calendarId}|${dateStr}|${o.start}|${o.end}"`,
+          hw:homeworkData[resolveHwKey(o.calendarId,o.ruleId,dateStr,o.start)], gradeKid:o.kid});
+      });
+    });
+    out.forEach(ev=>{
+      ev.s = toMin(ev.start);
+      ev.num = ev.exact ? null : ((LESSON_TIMES.find(l=>l.start===ev.start)||{}).n || null);
+      ev.e = (ev.end && toMin(ev.end)>ev.s) ? toMin(ev.end) : ev.s+60; // no end time -> drawn as one hour
+    });
+    return out;
+  }
+  // events that overlap in time sit side by side inside one lane
+  function assignLanes(events){
+    events.sort((a,b)=>a.s-b.s||b.e-a.e);
+    const clusters = []; let cur = [], curEnd = -1;
+    events.forEach(ev=>{
+      if(cur.length && ev.s>=curEnd){ clusters.push(cur); cur = []; curEnd = -1; }
+      cur.push(ev); curEnd = Math.max(curEnd, ev.e);
+    });
+    if(cur.length) clusters.push(cur);
+    clusters.forEach(cl=>{
+      const laneEnds = [];
+      cl.forEach(ev=>{
+        let l = laneEnds.findIndex(e=>e<=ev.s);
+        if(l<0){ l = laneEnds.length; laneEnds.push(ev.e); } else laneEnds[l] = ev.e;
+        ev.lane = l;
+      });
+      cl.forEach(ev=>{ ev.lanes = laneEnds.length; });
+    });
+  }
+  function tsEventsFor(dateStr){
+    const ev = {petya:timelineEventsFor('petya',dateStr), fedya:timelineEventsFor('fedya',dateStr)};
+    assignLanes(ev.petya); assignLanes(ev.fedya);
+    return ev;
+  }
+  // visible hours: at least 08:00–16:00, widened to fit every lesson shown
+  function tsRange(evList){
+    let minS = 8*60, maxE = 16*60;
+    evList.forEach(ev=>['petya','fedya'].forEach(k=>ev[k].forEach(e=>{ minS = Math.min(minS,e.s); maxE = Math.max(maxE,e.e); })));
+    return {startH:Math.max(0,Math.floor(minS/60)), endH:Math.min(24,Math.ceil(maxE/60))};
+  }
+  function tsBlockHtml(ev, dateStr, startH, pph, mode){
+    const dur = ev.e-ev.s;
+    const timeTxt = ev.start + (ev.end?'–'+ev.end:'');
+    const flag = hwHasContent(ev.hw) ? (ev.hw.done?'✅':'📝') : '';
+    const badges = lessonGradeBadgesHtml(ev.gradeKid, ev.subject, dateStr, ev.start);
+    const title = ev.exact
+      ? `${ev.subject} · ${timeTxt}${ev.end?' ('+durLabel(dur)+')':''}`
+      : `${ev.subject}${ev.num?' · '+ev.num+' урок':''}`;
+    // geometry is expressed through --pph, so the whole scale can be stretched later to fit the text
+    const pos = `top:calc(var(--pph) * ${(ev.s - startH*60)/60});height:max(20px, calc(var(--pph) * ${dur/60} - 2px));left:calc(${ev.lane}*100%/${ev.lanes});width:calc(100%/${ev.lanes} - 3px);`;
+    const timeEl = (ev.exact && ev.end) ? `<span class="ts-t">${escapeHtml(timeTxt)}</span>` : '';
+    const gradesEl = badges ? `<span class="ts-grades">${badges}</span>` : '';
+    const hwEl = flag ? `<span class="ts-hw" title="${flag==='✅'?'Домашнее задание выполнено':'Есть домашнее задание'}">${flag}</span>` : '';
+    // opaque base under the tint, so the hour lines never show through a lesson block
+    const tint = ev.color ? `background:linear-gradient(${ev.color}22,${ev.color}22),var(--card);` : '';
+    if(mode==='day'){
+      const colorStyle = ev.color ? `${tint}border-left-color:${ev.color};` : `background:var(--${ev.kid}-soft);`;
+      return `<div class="cell-lesson ts-ev ${ev.color?'':ev.kid}" ${ev.attr} data-dur="${dur}" title="${escAttr(title)}" style="${pos}${colorStyle}">
+        <div class="ts-top"><span class="cell-subject">${escapeHtml(ev.subject)}</span></div>
+        ${hwEl}${gradesEl}${timeEl}
+      </div>`;
+    }
+    const colorStyle = ev.color ? `${tint}color:${ev.color};` : '';
+    return `<span class="wd-cell ts-ev ${ev.color?'':ev.kid}" ${ev.attr} data-dur="${dur}" title="${escAttr(title)}" style="${pos}${colorStyle}">
+      <span class="wd-name">${escapeHtml(ev.subject)}</span>${hwEl}${gradesEl}${timeEl}
+    </span>`;
+  }
+  function tsBodyHtml(ev, dateStr, startH, endH, pph, mode){
+    const hours = Math.max(1, endH-startH);
+    let labels = '';
+    for(let h=0; h<=hours; h++){
+      labels += `<div class="ts-hlabel" style="top:calc(var(--pph) * ${h});${h===0?'transform:none;':''}">${pad2(startH+h)}:00</div>`;
+    }
+    let now = '';
+    if(dateStr===iso(startOfDay(new Date()))){
+      const d = new Date(); const nm = d.getHours()*60+d.getMinutes();
+      if(nm>=startH*60 && nm<=endH*60) now = `<div class="ts-now" style="top:calc(var(--pph) * ${(nm-startH*60)/60});"></div>`;
+    }
+    return `<div class="ts-body ${mode}" data-basepph="${pph}" style="--pph:${pph}px;height:calc(var(--pph) * ${hours});">
+      <div class="ts-gutter">${labels}</div>
+      <div class="ts-lanes">${['petya','fedya'].map(k=>`<div class="ts-lane">${ev[k].map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>`).join('')}</div>
+      ${now}
+    </div>`;
+  }
+  // after the schedule is drawn: (1) give every day the same height of the reminders strip so
+  // the hour lines line up across all days of the week; (2) stretch the hour scale (the same
+  // for every day) until every lesson block holds its full text, homework mark and grades
+  function fitTimeScale(){
+    const bodies = app.querySelectorAll('.ts-body');
+    if(!bodies.length) return;
+    const boxes = app.querySelectorAll('.wd-flagbox');
+    if(boxes.length){
+      boxes.forEach(b=>{ b.style.minHeight = ''; });
+      let mh = 0; boxes.forEach(b=>{ mh = Math.max(mh, b.offsetHeight); });
+      boxes.forEach(b=>{ b.style.minHeight = mh+'px'; });
+    }
+    const base = parseFloat(bodies[0].dataset.basepph) || 72;
+    bodies.forEach(b=>b.style.setProperty('--pph', base+'px'));
+    let need = base;
+    app.querySelectorAll('.ts-ev').forEach(el=>{
+      if(el.scrollHeight <= el.clientHeight+1) return;
+      const dur = parseFloat(el.dataset.dur) || 60;
+      need = Math.max(need, (el.scrollHeight+3)*60/dur);
+    });
+    need = Math.min(need, base*2.6);
+    if(need > base+0.5) bodies.forEach(b=>b.style.setProperty('--pph', need+'px'));
+  }
+  window.addEventListener('resize', ()=>{ if(state.tab==='schedule') fitTimeScale(); });
+
   function renderDayView(){
     const dateStr = iso(state.date);
-    const rows = combinedRowsForDate(dateStr);
+    const ev = tsEventsFor(dateStr);
     let body = dayBannersHtml(dateStr);
-    if(rows.length===0){
+    if(!ev.petya.length && !ev.fedya.length){
       body += `<div class="empty-state">Уроков нет</div>`;
     } else {
-      body += `<div class="table-scroll"><table class="day-table"><thead><tr>
-        <th>Время</th><th class="col-petya">Петя</th><th class="col-fedya">Федя</th>
-      </tr></thead><tbody>${rows.map(r=>{
-        const end = (r.petyaOld&&r.petyaOld.end) || (r.fedyaOld&&r.fedyaOld.end) || (r.petyaCal[0]&&r.petyaCal[0].end) || (r.fedyaCal[0]&&r.fedyaCal[0].end) || '';
-        return `<tr><td class="time">${r.time}${end?'–'+end:''}</td>
-          ${dayCombinedCellHtml('petya',dateStr,r.petyaOld,r.petyaCal)}
-          ${dayCombinedCellHtml('fedya',dateStr,r.fedyaOld,r.fedyaCal)}
-        </tr>`;
-      }).join('')}</tbody></table></div>`;
+      const {startH,endH} = tsRange([ev]);
+      body += `<div class="ts-head"><span class="g"></span><span class="k" style="color:var(--petya);">Петя</span><span class="k" style="color:var(--fedya);">Федя</span></div>`;
+      body += tsBodyHtml(ev, dateStr, startH, endH, TS_PPH.day, 'day');
     }
     body += `<button class="btn secondary" style="margin-top:10px;" data-addlesson="${dateStr}">+ Добавить занятие</button>`;
     return `<div class="day-card">${body}</div>`;
@@ -1277,22 +1440,13 @@
       rems.forEach(r=> lines.push((r.type==='olympiad'?'🏆 ':'🚩 ')+r.text));
       return lines;
     });
-    const maxBannerLines = Math.max(0, ...dayBannerLines.map(l=>l.length));
+    const evs = days.map(d=>tsEventsFor(iso(d)));
+    const {startH,endH} = tsRange(evs);
     return `<div class="week-row">${days.map((d,idx)=>{
       const dateStr = iso(d);
-      const rows = combinedRowsForDate(dateStr);
       const lines = dayBannerLines[idx];
-      let inner = '';
-      lines.forEach(text=>{ inner += `<div class="wd-flags">${escapeHtml(text)}</div>`; });
-      for(let i=lines.length;i<maxBannerLines;i++){ inner += `<div class="wd-flags" style="visibility:hidden;">.</div>`; }
-      inner += rows.map(r=>{
-        const pCell = weekCombinedCellHtml('petya', dateStr, r.petyaOld, r.petyaCal);
-        const fCell = weekCombinedCellHtml('fedya', dateStr, r.fedyaOld, r.fedyaCal);
-        return `<div class="wd-period">
-          <div class="wd-ptime">${r.time}</div>
-          <div class="wd-pair">${pCell}${fCell}</div>
-        </div>`;
-      }).join('');
+      let inner = `<div class="wd-flagbox">${lines.map(text=>`<div class="wd-flags">${escapeHtml(text)}</div>`).join('')}</div>`;
+      inner += tsBodyHtml(evs[idx], dateStr, startH, endH, TS_PPH.week, 'week');
       inner += `<button class="wd-add" data-addlesson="${dateStr}">+ занятие</button>`;
       return `<div class="week-daycard">
         <div class="wd-head ${dateStr===todayStr?'today':''}">${DOW[d.getDay()]}, ${d.getDate()}</div>

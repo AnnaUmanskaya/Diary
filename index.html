@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Дневник — Петя и Федя</title>
+<title>Дневник</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=PT+Serif:wght@400;700&family=PT+Sans:wght@400;700&display=swap" rel="stylesheet">
@@ -499,17 +499,14 @@
 (function(){
   "use strict";
   const RAW = JSON.parse(document.getElementById('schedule-data').textContent);
-  const KIDS = [
-    {id:'petya', name:'Петя', initial:'П', hex:'#2e5a88', soft:'#e4edf6'},
-    {id:'fedya', name:'Федя', initial:'Ф', hex:'#3f7a4c', soft:'#e8f2e9'}
-  ];
+  const KIDS = []; // active children (+ «Я» when personal calendars exist); rebuilt by rebuildKids()
   const OLYMPIAD_LEAD_DAYS = 14;
   const REMINDER_LEAD_DAYS = 7;
 
   // ---------- index data ----------
-  const lessonsByKidDate = {petya:{}, fedya:{}};
-  const alldayByKid = {petya:[], fedya:[]};
-  KIDS.forEach(k=>{
+  const lessonsByKidDate = new Proxy({}, {get:(t,k)=> t[k]||(t[k]={})});
+  const alldayByKid = new Proxy({}, {get:(t,k)=> t[k]||(t[k]=[])});
+  Object.keys(RAW).forEach(id=>{ const k={id};
     RAW[k.id].lessons.forEach(([date,start,end,subject])=>{
       (lessonsByKidDate[k.id][date] = lessonsByKidDate[k.id][date] || []).push({start,end,subject});
     });
@@ -542,6 +539,26 @@
   let fileLibraryData = []; // persistent registry of every uploaded homework file, independent of which homework entry currently references it
   let selectedRuleIds = new Set(); // multi-selected calendar rule ids in "Настройка расписания" for bulk edits
   let storageReady = false;
+  let childrenData = []; // {id,name,hex, archive?:{...snapshot of that child's data}}
+  let groupsData = [];   // {id,kind:'kids'|'study'|'personal'|'work'|'custom',name}
+  let currentUser = null, authMode = 'login', authMsg = '';
+  const GROUP_KINDS = [['kids','Учебный (дети)'],['study','Учебный (личный)'],['personal','Личный'],['work','Рабочий']];
+  const KID_COLORS = ['#2e5a88','#3f7a4c','#a9761e','#8a3f9a','#b6483f','#2a8a8a'];
+  const AUTO_CALS = [['lyceum','Лицей'],['extra','Доп.занятия'],['events','Мероприятия']];
+  const newId = p => p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  function softOf(hex){ const n=parseInt(hex.slice(1),16); return '#'+[n>>16&255,n>>8&255,n&255].map(c=>Math.round(c+(255-c)*0.88).toString(16).padStart(2,'0')).join(''); }
+  function rebuildKids(){
+    KIDS.length = 0;
+    childrenData.filter(c=>!c.archive).forEach(c=>KIDS.push({id:c.id,name:c.name,initial:(c.name||'?')[0].toUpperCase(),hex:c.hex,soft:softOf(c.hex)}));
+    if(groupsData.some(g=>g.kind!=='kids')) KIDS.push({id:'me',name:'Я',initial:'Я',hex:'#6b4e9b',soft:softOf('#6b4e9b')});
+    let st = document.getElementById('kid-styles'); if(!st){ st=document.createElement('style'); st.id='kid-styles'; document.head.appendChild(st); }
+    st.textContent = KIDS.map(k=>`.kid-badge.${k.id}{background:${k.hex};}.day-table th.col-${k.id}{color:${k.hex};}.cell-lesson.${k.id}{border-left:3px solid ${k.hex};}.wd-cell.${k.id}{background:${k.soft};color:${k.hex};}.month-cell .mc-line.${k.id}{color:${k.hex};}`).join('');
+    const ok = id => KIDS.some(k=>k.id===id);
+    if(!ok(gradesKid)) gradesKid = (KIDS[0]||{}).id;
+    if(olKidFilter!=='all' && !ok(olKidFilter)) olKidFilter='all';
+    if(typeof hwFilterSource!=='undefined' && hwFilterSource!=='all' && !ok(hwFilterSource)) hwFilterSource='all';
+    if(typeof libFilterKid!=='undefined' && libFilterKid!=='all' && !ok(libFilterKid)) libFilterKid='all';
+  }
 
   // ---------- helpers ----------
   function startOfDay(d){const n=new Date(d);n.setHours(0,0,0,0);return n;}
@@ -690,29 +707,17 @@
     return out;
   }
   function calRowsForDate(dateStr){
-    const occ = calOccurrencesForDate(dateStr);
     const map = {};
-    occ.forEach(o=>{
-      if(!map[o.start]) map[o.start] = {petya:[], fedya:[]};
-      if(o.kid==='petya' || o.kid==='both') map[o.start].petya.push(o);
-      if(o.kid==='fedya' || o.kid==='both') map[o.start].fedya.push(o);
+    calOccurrencesForDate(dateStr).forEach(o=>{
+      const m = map[o.start] = map[o.start] || {};
+      KIDS.forEach(k=>{ if(o.kid===k.id || o.kid==='both') (m[k.id]=m[k.id]||[]).push(o); });
     });
-    return Object.keys(map).sort().map(start=>({start, petya:map[start].petya, fedya:map[start].fedya}));
+    return Object.keys(map).sort().map(start=>({start, by:map[start]}));
   }
   function combinedRowsForDate(dateStr){
-    const oldRows = dayRows(dateStr);
-    const calRows = calRowsForDate(dateStr);
     const map = {};
-    oldRows.forEach(r=>{
-      if(!map[r.time]) map[r.time] = {petyaOld:null, fedyaOld:null, petyaCal:[], fedyaCal:[]};
-      map[r.time].petyaOld = r.petya || null;
-      map[r.time].fedyaOld = r.fedya || null;
-    });
-    calRows.forEach(r=>{
-      if(!map[r.start]) map[r.start] = {petyaOld:null, fedyaOld:null, petyaCal:[], fedyaCal:[]};
-      map[r.start].petyaCal = r.petya;
-      map[r.start].fedyaCal = r.fedya;
-    });
+    dayRows(dateStr).forEach(r=>{ (map[r.time]=map[r.time]||{old:{},cal:{}}).old = r.by; });
+    calRowsForDate(dateStr).forEach(r=>{ (map[r.start]=map[r.start]||{old:{},cal:{}}).cal = r.by; });
     return Object.keys(map).sort().map(time=>({time, ...map[time]}));
   }
   function calHwKey(calendarId, ruleId, dateStr, start){
@@ -786,14 +791,10 @@
   }
 
   function dayRows(dateStr){
-    const p = (lessonsByKidDate.petya[dateStr]||[]).concat(customLessonsFor('petya',dateStr));
-    const f = (lessonsByKidDate.fedya[dateStr]||[]).concat(customLessonsFor('fedya',dateStr));
-    const times = Array.from(new Set([...p.map(l=>l.start), ...f.map(l=>l.start)])).sort();
-    return times.map(t=>({
-      time:t,
-      petya: p.find(l=>l.start===t)||null,
-      fedya: f.find(l=>l.start===t)||null
-    }));
+    const L = {};
+    KIDS.forEach(k=>{ L[k.id] = (lessonsByKidDate[k.id][dateStr]||[]).concat(customLessonsFor(k.id,dateStr)); });
+    const times = Array.from(new Set(KIDS.flatMap(k=>L[k.id].map(l=>l.start)))).sort();
+    return times.map(t=>({time:t, by:Object.fromEntries(KIDS.map(k=>[k.id, L[k.id].find(l=>l.start===t)||null]))}));
   }
 
   // ---------- grades ----------
@@ -803,8 +804,8 @@
   function isLyceumCalendarForKid(cal, kid){
     if(!cal || !cal.name) return false;
     const n = normCalName(cal.name);
-    const kidName = kid==='petya' ? 'петя' : 'федя';
-    return n.includes('лицей') && n.includes(kidName);
+    const ko = KIDS.find(k=>k.id===kid);
+    return n.includes('лицей') && (cal.kid===kid || (!!ko && n.includes(normCalName(ko.name))));
   }
   function subjectsForKid(kid){
     const set = new Set();
@@ -879,86 +880,59 @@
   let storageBackend = sb ? 'supabase' : 'local';
   const FILES_BUCKET = 'homework-files';
 
-  async function loadStorage(){
-    try {
-      if (!sb) throw new Error('Supabase клиент недоступен');
-
-      const { data, error } = await sb
-        .from('app_state')
-        .select('data')
-        .eq('key', 'diary_state')
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Ошибка Supabase:', error);
-      }
-
-      if (data && data.data) {
-        const parsed = data.data;
-        homeworkData = parsed.homework || {};
-        overridesData = parsed.overrides || {};
-        remindersData = parsed.reminders || [];
-        vacationsData = parsed.vacations || [];
-        customLessonsData = parsed.customLessons || [];
-        recurringOverridesData = parsed.recurringOverrides || [];
-        calendarsData = parsed.calendars || [];
-        calRulesData = parsed.calRules || [];
-        gradesData = parsed.grades || {};
-        documentsData = parsed.documents || [];
-        linksData = parsed.links || [];
-        excludedSubjectsData = parsed.excludedSubjects || {petya:[], fedya:[]};
-        fileLibraryData = parsed.fileLibrary || [];
-      } else {
-        const local = localStorage.getItem('diary:diary-data');
-        if (local) {
-          const parsed = JSON.parse(local);
-          homeworkData = parsed.homework || {};
-          overridesData = parsed.overrides || {};
-          remindersData = parsed.reminders || [];
-          vacationsData = parsed.vacations || [];
-          customLessonsData = parsed.customLessons || [];
-          recurringOverridesData = parsed.recurringOverrides || [];
-          calendarsData = parsed.calendars || [];
-          calRulesData = parsed.calRules || [];
-          gradesData = parsed.grades || {};
-          documentsData = parsed.documents || [];
-          linksData = parsed.links || [];
-          excludedSubjectsData = parsed.excludedSubjects || {petya:[], fedya:[]};
-          fileLibraryData = parsed.fileLibrary || [];
-          await persistAll();
-        }
-      }
-    } catch(e) {
-      console.warn('Работаем в режиме offline/localStorage:', e.message);
-      storageBackend = 'local';
-      try {
-        const local = localStorage.getItem('diary:diary-data');
-        if (local) {
-          const parsed = JSON.parse(local);
-          homeworkData = parsed.homework || {};
-          overridesData = parsed.overrides || {};
-          remindersData = parsed.reminders || [];
-          vacationsData = parsed.vacations || [];
-          customLessonsData = parsed.customLessons || [];
-          recurringOverridesData = parsed.recurringOverrides || [];
-          calendarsData = parsed.calendars || [];
-          calRulesData = parsed.calRules || [];
-          gradesData = parsed.grades || {};
-          documentsData = parsed.documents || [];
-          linksData = parsed.links || [];
-          excludedSubjectsData = parsed.excludedSubjects || {petya:[], fedya:[]};
-          fileLibraryData = parsed.fileLibrary || [];
-        }
-      } catch(err){}
+  const lsKey = () => 'diary:'+(currentUser?currentUser.id:'anon');
+  const stateKey = () => 'diary_state:'+currentUser.id;
+  function applyParsed(p){
+    homeworkData = p.homework || {}; overridesData = p.overrides || {}; remindersData = p.reminders || [];
+    vacationsData = p.vacations || []; customLessonsData = p.customLessons || [];
+    recurringOverridesData = p.recurringOverrides || []; calendarsData = p.calendars || [];
+    calRulesData = p.calRules || []; gradesData = p.grades || {}; documentsData = p.documents || [];
+    linksData = p.links || []; excludedSubjectsData = p.excludedSubjects || {}; fileLibraryData = p.fileLibrary || [];
+    childrenData = p.children || []; groupsData = p.groups || [];
+    if(!p.children && !p.groups && (calendarsData.length || Object.keys(homeworkData).length)){ // data from the old two-kid version
+      childrenData = [{id:'petya',name:'Петя',hex:'#2e5a88'},{id:'fedya',name:'Федя',hex:'#3f7a4c'}];
+      groupsData = [{id:'g-kids',kind:'kids',name:'Учебный (дети)'}];
     }
+  }
+  async function loadUserData(){
+    let parsed = null, fromCloud = false;
+    try {
+      if(!sb) throw new Error('Supabase клиент недоступен');
+      const { data, error } = await sb.from('app_state').select('data').eq('key', stateKey()).maybeSingle();
+      if(error) console.error('Ошибка Supabase:', error);
+      if(data && data.data){ parsed = data.data; fromCloud = true; }
+    } catch(e){ console.warn('Работаем в режиме offline/localStorage:', e.message); storageBackend = 'local'; }
+    if(!parsed){
+      try { const l = localStorage.getItem(lsKey()) || localStorage.getItem('diary:diary-data'); if(l) parsed = JSON.parse(l); } catch(e){}
+    }
+    applyParsed(parsed || {});
+    rebuildKids();
+    if(!groupsData.length) state.tab = 'profile';
     storageReady = true;
     render();
+    if(parsed && !fromCloud){ await persistAll(); try{ localStorage.removeItem('diary:diary-data'); }catch(e){} }
+  }
+  async function loadStorage(){
+    if(/type=recovery/.test(location.hash)) authMode = 'recovery';
+    try {
+      if(!sb){ currentUser = {id:'local', email:''}; }
+      else {
+        sb.auth.onAuthStateChange(ev=>{
+          if(ev==='PASSWORD_RECOVERY'){ authMode='recovery'; storageReady=true; render(); }
+          if(ev==='SIGNED_OUT'){ currentUser=null; applyParsed({}); rebuildKids(); render(); }
+        });
+        const { data } = await sb.auth.getSession();
+        currentUser = data.session ? data.session.user : null;
+      }
+    } catch(e){ console.warn(e); currentUser = {id:'local', email:''}; }
+    if(currentUser && authMode!=='recovery') await loadUserData(); else { storageReady = true; render(); }
   }
 
   let saveInFlight = null;
   let saveFailed = false;
 
   async function persistAll(){
+    if(!currentUser) return;
     const payload = {
       homework: homeworkData,
       overrides: overridesData,
@@ -972,11 +946,13 @@
       documents: documentsData,
       links: linksData,
       excludedSubjects: excludedSubjectsData,
-      fileLibrary: fileLibraryData
+      fileLibrary: fileLibraryData,
+      children: childrenData,
+      groups: groupsData
     };
 
     try {
-      localStorage.setItem('diary:diary-data', JSON.stringify(payload));
+      localStorage.setItem(lsKey(), JSON.stringify(payload));
     } catch(e) {}
 
     if (saveInFlight) await saveInFlight;
@@ -986,7 +962,7 @@
         const { error } = await sb
           .from('app_state')
           .upsert({
-            key: 'diary_state',
+            key: stateKey(),
             data: payload,
             updated_at: new Date().toISOString()
           });
@@ -1007,13 +983,186 @@
     saveInFlight = null;
   }
 
+
+  // ---------- auth ----------
+  function authHtml(){
+    const m = authMode, login = m==='login';
+    const title = {login:'Вход',register:'Регистрация',forgot:'Восстановление пароля',recovery:'Новый пароль'}[m];
+    const btn = {login:'Войти',register:'Зарегистрироваться',forgot:'Отправить ссылку на почту',recovery:'Сохранить пароль'}[m];
+    return `<div style="max-width:380px;margin:40px auto;"><header class="top"><h1>Дневник</h1><div class="subtitle">${title}</div></header>
+      <div class="day-card" style="padding:18px;">
+        ${m!=='recovery'?`<div class="field"><label>Email</label><input type="email" id="au-email" autocomplete="email"></div>`:''}
+        ${m!=='forgot'?`<div class="field" style="margin-top:10px;"><label>${m==='recovery'?'Новый пароль':'Пароль'}</label><input type="password" id="au-pass" autocomplete="${login?'current-password':'new-password'}"></div>`:''}
+        ${authMsg?`<div class="warn-banner" style="margin-top:12px;">${escapeHtml(authMsg)}</div>`:''}
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;"><button class="btn" id="au-go">${btn}</button>
+          ${login?'<button class="btn secondary" id="au-reg">Создать аккаунт</button>':(m!=='recovery'?'<button class="btn secondary" id="au-back">Назад</button>':'')}</div>
+        ${login?`<div style="margin-top:14px;font-size:13px;display:flex;gap:16px;flex-wrap:wrap;"><a href="#" id="au-forgot">Забыли пароль?</a><a href="#" id="au-guest">Войти как гость</a></div>`:''}
+      </div></div>`;
+  }
+  function bindAuth(){
+    const go = document.getElementById('au-go'); if(!go) return;
+    const setMode = (m,msg)=>()=>{ authMode=m; authMsg=msg||''; render(); };
+    const on = (id,fn)=>{ const e=document.getElementById(id); if(e) e.onclick=ev=>{ ev.preventDefault(); fn(); }; };
+    on('au-reg', setMode('register')); on('au-back', setMode('login')); on('au-forgot', setMode('forgot'));
+    on('au-guest', async ()=>{
+      const { data, error } = await sb.auth.signInAnonymously();
+      if(error){ authMsg='Гостевой вход недоступен: '+error.message; return render(); }
+      currentUser = data.user; await loadUserData();
+    });
+    const pw = document.getElementById('au-pass'); if(pw) pw.onkeydown = e=>{ if(e.key==='Enter') go.click(); };
+    go.onclick = async ()=>{
+      const em = document.getElementById('au-email'), ps = document.getElementById('au-pass');
+      const email = em ? em.value.trim() : '', password = ps ? ps.value : '';
+      authMsg = '';
+      if(authMode!=='recovery' && !email){ authMsg='Введите email.'; return render(); }
+      if(authMode!=='forgot' && password.length<6){ authMsg='Пароль — не короче 6 символов.'; return render(); }
+      if(authMode==='login'){
+        const { data, error } = await sb.auth.signInWithPassword({email,password});
+        if(error){ authMsg='Не удалось войти: '+error.message; return render(); }
+        currentUser = data.user; await loadUserData();
+      } else if(authMode==='register'){
+        const { data, error } = await sb.auth.signUp({email,password});
+        if(error){ authMsg='Не удалось зарегистрироваться: '+error.message; return render(); }
+        if(data.session){ currentUser = data.user; await loadUserData(); }
+        else { authMode='login'; authMsg='Мы отправили письмо — подтвердите email и затем войдите.'; render(); }
+      } else if(authMode==='forgot'){
+        const { error } = await sb.auth.resetPasswordForEmail(email,{redirectTo: location.origin+location.pathname});
+        authMode='login'; authMsg = error ? 'Не удалось отправить письмо: '+error.message : 'Если такой аккаунт есть, мы отправили ссылку для смены пароля.'; render();
+      } else { // recovery: user came from the e-mail link
+        const { data, error } = await sb.auth.updateUser({password});
+        if(error){ authMsg='Не удалось сменить пароль: '+error.message; return render(); }
+        history.replaceState(null,'',location.pathname); authMode='login'; currentUser = data.user; await loadUserData();
+      }
+    };
+  }
+
+  // ---------- groups (calendar categories) and children ----------
+  function createKidCalendars(c){
+    AUTO_CALS.forEach(([t,p])=>calendarsData.push({id:newId('cal'),name:p+'_'+c.name,color:c.hex,kid:c.id,auto:t,groupId:'g-kids',hidden:false}));
+  }
+  function dropCalendars(ids){
+    calendarsData = calendarsData.filter(c=>!ids.includes(c.id));
+    calRulesData = calRulesData.filter(r=>!ids.includes(r.calendarId));
+    Object.keys(homeworkData).forEach(k=>{ if(ids.some(i=>k.startsWith('cal|'+i+'|'))) delete homeworkData[k]; });
+  }
+  const KEEP = (arr,pred)=>{ const o={t:[],r:[]}; arr.forEach(x=>(pred(x)?o.t:o.r).push(x)); return o; };
+  const PICK = (obj,pred)=>{ const t={}; Object.keys(obj).forEach(k=>{ if(pred(k)){ t[k]=obj[k]; delete obj[k]; } }); return t; };
+  function archiveChild(id){
+    const c = childrenData.find(x=>x.id===id); if(!c) return;
+    const calIds = calendarsData.filter(x=>x.kid===id).map(x=>x.id), s = {};
+    let o;
+    o=KEEP(calendarsData,x=>x.kid===id); s.calendars=o.t; calendarsData=o.r;
+    o=KEEP(calRulesData,x=>calIds.includes(x.calendarId)); s.calRules=o.t; calRulesData=o.r;
+    o=KEEP(remindersData,x=>x.kid===id); s.reminders=o.t; remindersData=o.r;
+    o=KEEP(vacationsData,x=>x.kid===id); s.vacations=o.t; vacationsData=o.r;
+    o=KEEP(customLessonsData,x=>x.kid===id); s.customLessons=o.t; customLessonsData=o.r;
+    o=KEEP(recurringOverridesData,x=>x.kid===id); s.recurringOverrides=o.t; recurringOverridesData=o.r;
+    s.homework = PICK(homeworkData,k=>k.startsWith(id+'|') || calIds.some(i=>k.startsWith('cal|'+i+'|')));
+    s.overrides = PICK(overridesData,k=>k.startsWith(id+'|'));
+    s.grades = gradesData[id]||null; delete gradesData[id];
+    s.excluded = excludedSubjectsData[id]||null; delete excludedSubjectsData[id];
+    s.at = new Date().toISOString();
+    c.archive = s;
+  }
+  function restoreChild(id){
+    const c = childrenData.find(x=>x.id===id); if(!c||!c.archive) return;
+    const s = c.archive;
+    calendarsData.push(...s.calendars); calRulesData.push(...s.calRules); remindersData.push(...s.reminders);
+    vacationsData.push(...s.vacations); customLessonsData.push(...s.customLessons); recurringOverridesData.push(...s.recurringOverrides);
+    Object.assign(homeworkData,s.homework); Object.assign(overridesData,s.overrides);
+    if(s.grades) gradesData[id]=s.grades; if(s.excluded) excludedSubjectsData[id]=s.excluded;
+    delete c.archive;
+  }
+  async function commitProfile(){ rebuildKids(); await persistAll(); render(); }
+
+  function renderProfileTab(){
+    const active = childrenData.filter(c=>!c.archive), archived = childrenData.filter(c=>c.archive);
+    const missing = GROUP_KINDS.filter(([k])=>!groupsData.some(g=>g.kind===k));
+    const inp = 'padding:5px 8px;border:1px solid var(--paper-line);border-radius:6px;';
+    const guest = !!currentUser.is_anonymous, inp0 = 'padding:5px 8px;border:1px solid var(--paper-line);border-radius:6px;';
+    let o = `<div class="section-title">Аккаунт</div><div class="reminder-form"><b style="flex:1;">${guest?'Вы вошли как гость':escapeHtml(currentUser.email||'локальный режим (без входа)')}</b>${currentUser.id!=='local'?'<button class="btn secondary" id="au-logout">Выйти</button>':''}</div>`;
+    if(guest) o += `<div style="font-size:12.5px;color:var(--ink-soft);margin:-6px 0 8px;">Гостевые данные привязаны к этому браузеру: после выхода или очистки браузера они потеряются. Создайте аккаунт — все ваши данные сохранятся.</div>
+      <div class="reminder-form"><div class="field" style="flex:1;"><label>Email</label><input type="email" id="gu-email" style="${inp0}"></div><div class="field"><label>Пароль</label><input type="password" id="gu-pass" style="${inp0}"></div><button class="btn" id="gu-up">Создать аккаунт</button></div>`;
+    o += `<div class="section-title">Мои календари</div><div class="reminder-form">${missing.map(([k,n])=>`<button class="btn secondary" data-grpadd="${k}">+ ${n}</button>`).join('')}
+      <input type="text" id="grp-new" placeholder="Свой календарь, например «Спорт»" style="${inp}flex:1;min-width:200px;"><button class="btn" id="grp-add">Добавить</button></div>`;
+    if(!groupsData.length) o += `<div class="empty-state">Выберите, какие календари вам нужны.</div>`;
+    o += `<div class="cal-list">${groupsData.map(g=>`<div class="cal-row"><input type="text" data-grpname="${g.id}" value="${escAttr(g.name)}" style="flex:1;font-weight:700;${inp}"><button class="rdel" data-grpdel="${g.id}" title="Удалить календарь">✕</button></div>`).join('')}</div>`;
+    if(groupsData.some(g=>g.kind==='kids')){
+      o += `<div class="section-title">Дети</div><div class="reminder-form"><div class="field" style="flex:1;"><label>Имя ребёнка</label><input type="text" id="kid-new-name"></div>
+        <div class="field"><label>Цвет</label><input type="color" id="kid-new-color" value="${KID_COLORS[active.length%KID_COLORS.length]}" style="width:52px;padding:2px;height:36px;"></div>
+        <button class="btn" id="kid-add">Добавить ребёнка</button></div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 12px;">Для каждого ребёнка автоматически создаются календари: Лицей_Имя, Доп.занятия_Имя, Мероприятия_Имя.</div>`;
+      o += active.length ? `<div class="cal-list">${active.map(c=>`<div class="cal-row"><input type="color" data-kidcolor="${c.id}" value="${c.hex}" style="width:34px;height:28px;padding:1px;"><input type="text" data-kidname="${c.id}" value="${escAttr(c.name)}" style="flex:1;font-weight:700;${inp}"><button class="btn secondary" data-kidarch="${c.id}">В архив</button></div>`).join('')}</div>` : `<div class="empty-state">Детей пока нет.</div>`;
+      if(archived.length) o += `<div class="section-title">Архив</div><div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 8px;">Данные архивных детей скрыты из расписания и вкладок, но сохранены — их можно восстановить.</div>
+        <div class="cal-list">${archived.map(c=>`<div class="cal-row"><b style="flex:1;color:var(--ink-soft);">${escapeHtml(c.name)}</b><span style="font-size:12px;color:var(--ink-soft);">в архиве с ${c.archive.at.slice(0,10)}</span><button class="btn secondary" data-kidrestore="${c.id}">Восстановить</button><button class="btn danger" data-kiddel="${c.id}">Удалить навсегда</button></div>`).join('')}</div>`;
+    }
+    return o;
+  }
+  function bindProfile(){
+    const $ = s=>app.querySelectorAll(s), by = (id,l)=>l.find(x=>x.id===id);
+    const lo = document.getElementById('au-logout'); if(lo) lo.onclick = async ()=>{
+      if(currentUser.is_anonymous && !confirm('Вы гость: после выхода данные будут потеряны. Выйти?')) return;
+      await sb.auth.signOut();
+    };
+    const gu = document.getElementById('gu-up'); if(gu) gu.onclick = async ()=>{
+      const email = document.getElementById('gu-email').value.trim(), password = document.getElementById('gu-pass').value;
+      if(!email || password.length<6) return alert('Введите email и пароль (не короче 6 символов).');
+      const { error } = await sb.auth.updateUser({email,password});
+      alert(error ? 'Не удалось: '+error.message : 'Готово. Если включено подтверждение почты — перейдите по ссылке из письма.');
+    };
+    const addGroup = async (kind,name)=>{
+      if(!name) return;
+      const g = {id: kind==='kids'?'g-kids':newId('g'), kind, name}; groupsData.push(g);
+      if(kind!=='kids') calendarsData.push({id:newId('cal'),name,color:'#6b4e9b',kid:'me',groupId:g.id,hidden:false});
+      await commitProfile();
+    };
+    $('[data-grpadd]').forEach(el=>el.onclick=()=>addGroup(el.dataset.grpadd, (GROUP_KINDS.find(x=>x[0]===el.dataset.grpadd)||[])[1]));
+    const ga = document.getElementById('grp-add'); if(ga) ga.onclick = ()=>addGroup('custom', document.getElementById('grp-new').value.trim());
+    $('[data-grpname]').forEach(el=>el.onchange=async ()=>{
+      const g = by(el.dataset.grpname,groupsData), v = el.value.trim(); if(!g||!v) return;
+      calendarsData.forEach(c=>{ if(c.groupId===g.id && c.name===g.name) c.name=v; }); g.name=v; await commitProfile();
+    });
+    $('[data-grpdel]').forEach(el=>el.onclick=async ()=>{
+      const g = by(el.dataset.grpdel,groupsData); if(!g) return;
+      if(g.kind==='kids'){
+        if(!confirm('Убрать календарь «'+g.name+'»? Все дети будут перенесены в архив (данные сохранятся, их можно восстановить).')) return;
+        childrenData.filter(c=>!c.archive).forEach(c=>archiveChild(c.id));
+      } else {
+        if(!confirm('Удалить календарь «'+g.name+'» вместе со всеми его календарями, уроками и ДЗ?')) return;
+        dropCalendars(calendarsData.filter(c=>c.groupId===g.id).map(c=>c.id));
+      }
+      groupsData = groupsData.filter(x=>x.id!==g.id); await commitProfile();
+    });
+    const ka = document.getElementById('kid-add'); if(ka) ka.onclick = async ()=>{
+      const name = document.getElementById('kid-new-name').value.trim(); if(!name) return;
+      const c = {id:newId('k'),name,hex:document.getElementById('kid-new-color').value}; childrenData.push(c); createKidCalendars(c); await commitProfile();
+    };
+    $('[data-kidname]').forEach(el=>el.onchange=async ()=>{
+      const c = by(el.dataset.kidname,childrenData), v = el.value.trim(); if(!c||!v) return;
+      c.name = v; calendarsData.forEach(x=>{ if(x.kid===c.id && x.auto) x.name = AUTO_CALS.find(a=>a[0]===x.auto)[1]+'_'+v; }); await commitProfile();
+    });
+    $('[data-kidcolor]').forEach(el=>el.onchange=async ()=>{ const c=by(el.dataset.kidcolor,childrenData); if(c){ c.hex=el.value; await commitProfile(); } });
+    $('[data-kidarch]').forEach(el=>el.onclick=async ()=>{
+      const c = by(el.dataset.kidarch,childrenData);
+      if(c && confirm('Отправить «'+c.name+'» в архив? Расписание, оценки, олимпиады и напоминания будут скрыты, но их можно восстановить.')){ archiveChild(c.id); await commitProfile(); }
+    });
+    $('[data-kidrestore]').forEach(el=>el.onclick=async ()=>{ restoreChild(el.dataset.kidrestore); await commitProfile(); });
+    $('[data-kiddel]').forEach(el=>el.onclick=async ()=>{
+      const c = by(el.dataset.kiddel,childrenData);
+      if(c && confirm('Удалить «'+c.name+'» и все его данные навсегда? Восстановить будет нельзя.')){ childrenData = childrenData.filter(x=>x.id!==c.id); await commitProfile(); }
+    });
+    $('[data-calname]').forEach(el=>el.onchange=async ()=>{ const c=by(el.dataset.calname,calendarsData), v=el.value.trim(); if(c&&v){ c.name=v; await persistAll(); render(); } });
+  }
+
   // ---------- rendering ----------
   const app = document.getElementById('app');
 
   function render(){
     if(!storageReady){ app.innerHTML = '<div class="loading">Загрузка дневника…</div>'; return; }
+    if(!currentUser || authMode==='recovery'){ app.innerHTML = authHtml(); bindAuth(); return; }
     let html = renderHeader() + renderTabs();
     if(state.tab==='schedule') html += renderScheduleTab();
+    else if(state.tab==='profile') html += renderProfileTab();
     else if(state.tab==='calsettings') html += renderCalSettingsTab();
     else if(state.tab==='homework') html += renderHomeworkTab();
     else if(state.tab==='grades') html += renderGradesTab();
@@ -1032,12 +1181,12 @@
       ? ' · синхронизация с Supabase активна'
       : ' · сохраняется только в этом браузере';
     return `<header class="top">
-      <div><h1>Дневник Пети и Феди</h1><div class="subtitle">Расписание, домашние задания и напоминания${note}</div></div>
+      <div><h1>Дневник</h1><div class="subtitle">Расписание, домашние задания и напоминания${note}</div></div>
     </header>`;
   }
 
   function renderTabs(){
-    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады'],['olympiads','Олимпиады']];
+    const tabs = [['schedule','Расписание'],['profile','Календари и дети'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады'],['olympiads','Олимпиады']];
     return `<nav class="tabs">${tabs.map(([id,label])=>
       `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>`;
   }
@@ -1151,11 +1300,7 @@
 
   function dayBannersHtml(dateStr){
     let out='';
-    const holP = isInHoliday('petya',dateStr), holF = isInHoliday('fedya',dateStr);
-    if(holP) out += `<div class="banner holiday">🏖 Петя — ${escapeHtml(holP.summary)}</div>`;
-    if(holF) out += `<div class="banner holiday">🏖 Федя — ${escapeHtml(holF.summary)}</div>`;
-    icsInfoEventsFor('petya',dateStr).forEach(a=> out += `<div class="banner">📋 Петя — ${escapeHtml(a.summary)}</div>`);
-    icsInfoEventsFor('fedya',dateStr).forEach(a=> out += `<div class="banner">📋 Федя — ${escapeHtml(a.summary)}</div>`);
+    KIDS.forEach(k=>{ const h=isInHoliday(k.id,dateStr); if(h) out += `<div class="banner holiday">🏖 ${escapeHtml(k.name)} — ${escapeHtml(h.summary)}</div>`; icsInfoEventsFor(k.id,dateStr).forEach(a=> out += `<div class="banner">📋 ${escapeHtml(k.name)} — ${escapeHtml(a.summary)}</div>`); });
     remindersData.filter(r=>remOccursOn(r,dateStr) && r.type!=='olympiad').forEach(r=>{
       const kidLabel = r.kid==='both'?'обоим':(KIDS.find(k=>k.id===r.kid)||{}).name;
       out += `<div class="banner">🚩 ${escapeHtml(r.text)} <span style="opacity:.7">(${kidLabel})</span></div>`;
@@ -1169,11 +1314,7 @@
 
   function dayBannersHtmlPlain(dateStr){
     let parts = [];
-    const holP = isInHoliday('petya',dateStr), holF = isInHoliday('fedya',dateStr);
-    if(holP) parts.push('🏖 Петя — '+holP.summary);
-    if(holF) parts.push('🏖 Федя — '+holF.summary);
-    icsInfoEventsFor('petya',dateStr).forEach(a=> parts.push('📋 Петя — '+a.summary));
-    icsInfoEventsFor('fedya',dateStr).forEach(a=> parts.push('📋 Федя — '+a.summary));
+    KIDS.forEach(k=>{ const h=isInHoliday(k.id,dateStr); if(h) parts.push('🏖 '+k.name+' — '+h.summary); icsInfoEventsFor(k.id,dateStr).forEach(a=> parts.push('📋 '+k.name+' — '+a.summary)); });
     remindersData.filter(r=>remOccursOn(r,dateStr) && r.type!=='olympiad').forEach(r=>{
       const kidLabel = r.kid==='both'?'обоим':(KIDS.find(k=>k.id===r.kid)||{}).name;
       parts.push('🚩 '+r.text+' ('+kidLabel+')');
@@ -1208,7 +1349,7 @@
 
   // grades entered from the schedule for one lesson, as small badges, e.g. [5/4²]
   function lessonGradeBadgesHtml(kid, subject, dateStr, start){
-    if(kid!=='petya' && kid!=='fedya') return '';
+    if(!KIDS.some(k=>k.id===kid)) return '';
     const sj = (subject||'').trim();
     if(!sj || !gradesData[kid] || !gradesData[kid][sj]) return '';
     let out = '';
@@ -1291,8 +1432,8 @@
   function timelineEventsFor(kid, dateStr){
     const out = [];
     combinedRowsForDate(dateStr).forEach(r=>{
-      const old = kid==='petya' ? r.petyaOld : r.fedyaOld;
-      const cals = (kid==='petya' ? r.petyaCal : r.fedyaCal) || [];
+      const old = (r.old||{})[kid] || null;
+      const cals = (r.cal||{})[kid] || [];
       if(old){
         out.push({kid, start:old.start, end:old.end||'', subject:resolvedSubject(kid, dateStr, old.start), color:null,
           exact: !!findCustomLesson(kid, dateStr, old.start), // one-off extra classes have a set time; school lessons go by number
@@ -1333,14 +1474,14 @@
     });
   }
   function tsEventsFor(dateStr){
-    const ev = {petya:timelineEventsFor('petya',dateStr), fedya:timelineEventsFor('fedya',dateStr)};
-    assignLanes(ev.petya); assignLanes(ev.fedya);
+    const ev = {};
+    KIDS.forEach(k=>{ ev[k.id] = timelineEventsFor(k.id,dateStr); assignLanes(ev[k.id]); });
     return ev;
   }
   // visible hours: at least 08:00–16:00, widened to fit every lesson shown
   function tsRange(evList){
     let minS = 8*60, maxE = 16*60;
-    evList.forEach(ev=>['petya','fedya'].forEach(k=>ev[k].forEach(e=>{ minS = Math.min(minS,e.s); maxE = Math.max(maxE,e.e); })));
+    evList.forEach(ev=>KIDS.forEach(k=>(ev[k.id]||[]).forEach(e=>{ minS = Math.min(minS,e.s); maxE = Math.max(maxE,e.e); })));
     return {startH:Math.max(0,Math.floor(minS/60)), endH:Math.min(24,Math.ceil(maxE/60))};
   }
   function tsBlockHtml(ev, dateStr, startH, pph, mode){
@@ -1383,7 +1524,7 @@
     }
     return `<div class="ts-body ${mode}" data-basepph="${pph}" style="--pph:${pph}px;height:calc(var(--pph) * ${hours});">
       <div class="ts-gutter">${labels}</div>
-      <div class="ts-lanes">${['petya','fedya'].map(k=>`<div class="ts-lane">${ev[k].map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>`).join('')}</div>
+      <div class="ts-lanes">${KIDS.map(k=>`<div class="ts-lane">${(ev[k.id]||[]).map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>`).join('')}</div>
       ${now}
     </div>`;
   }
@@ -1416,11 +1557,11 @@
     const dateStr = iso(state.date);
     const ev = tsEventsFor(dateStr);
     let body = dayBannersHtml(dateStr);
-    if(!ev.petya.length && !ev.fedya.length){
+    if(!KIDS.some(k=>(ev[k.id]||[]).length)){
       body += `<div class="empty-state">Уроков нет</div>`;
     } else {
       const {startH,endH} = tsRange([ev]);
-      body += `<div class="ts-head"><span class="g"></span><span class="k" style="color:var(--petya);">Петя</span><span class="k" style="color:var(--fedya);">Федя</span></div>`;
+      body += `<div class="ts-head"><span class="g"></span>${KIDS.map(k=>`<span class="k" style="color:${k.hex};">${escapeHtml(k.name)}</span>`).join('')}</div>`;
       body += tsBodyHtml(ev, dateStr, startH, endH, TS_PPH.day, 'day');
     }
     body += `<button class="btn secondary" style="margin-top:10px;" data-addlesson="${dateStr}">+ Добавить занятие</button>`;
@@ -1433,10 +1574,10 @@
     const todayStr = iso(startOfDay(new Date()));
     const dayBannerLines = days.map(d=>{
       const dateStr = iso(d);
-      const holP = isInHoliday('petya',dateStr), holF = isInHoliday('fedya',dateStr);
+      const holAny = KIDS.some(k=>isInHoliday(k.id,dateStr));
       const rems = remindersData.filter(r=>remOccursOn(r,dateStr));
       let lines = [];
-      if(holP||holF) lines.push('🏖 каникулы');
+      if(holAny) lines.push('🏖 каникулы');
       rems.forEach(r=> lines.push((r.type==='olympiad'?'🏆 ':'🚩 ')+r.text));
       return lines;
     });
@@ -1453,8 +1594,7 @@
         <div class="wd-period" style="border-bottom:none;padding:0 0 4px;">
           <div class="wd-ptime"></div>
           <div class="wd-pair" style="font-size:10px;font-weight:700;">
-            <span style="flex:1;color:var(--petya);text-align:center;">Петя</span>
-            <span style="flex:1;color:var(--fedya);text-align:center;">Федя</span>
+            ${KIDS.map(k=>`<span style="flex:1;color:${k.hex};text-align:center;">${escapeHtml(k.name)}</span>`).join('')}
           </div>
         </div>
         ${inner}
@@ -1475,13 +1615,10 @@
     const body = cells.map(d=>{
       const dateStr = iso(d);
       const inMonth = d.getMonth()===state.date.getMonth();
-      const pCount = (lessonsByKidDate.petya[dateStr]||[]).length + customLessonsFor('petya',dateStr).length;
-      const fCount = (lessonsByKidDate.fedya[dateStr]||[]).length + customLessonsFor('fedya',dateStr).length;
-      const hol = isInHoliday('petya',dateStr) || isInHoliday('fedya',dateStr);
+      const hol = KIDS.some(k=>isInHoliday(k.id,dateStr));
       const rems = remindersData.filter(r=>remOccursOn(r,dateStr));
       const olymp = rems.some(r=>r.type==='olympiad');
       const remind = rems.some(r=>r.type!=='olympiad');
-      const pendP = dayHasPendingHw('petya',dateStr), pendF = dayHasPendingHw('fedya',dateStr);
       const calOcc = calOccurrencesForDate(dateStr);
       const calByCal = {};
       calOcc.forEach(o=>{ (calByCal[o.calendarId]=calByCal[o.calendarId]||[]).push(o); });
@@ -1492,8 +1629,7 @@
       return `<div class="${cls}" data-day="${dateStr}">
         <div class="mc-flags">${olymp?'🏆':''}${remind?'🚩':''}</div>
         <div class="mc-date">${d.getDate()}</div>
-        ${pCount?`<div class="mc-line petya"><span class="kid-badge petya" style="width:13px;height:13px;font-size:8px;">П</span>${pCount}${pendP?' 📝':''}</div>`:''}
-        ${fCount?`<div class="mc-line fedya"><span class="kid-badge fedya" style="width:13px;height:13px;font-size:8px;">Ф</span>${fCount}${pendF?' 📝':''}</div>`:''}
+        ${KIDS.map(k=>{ const n=(lessonsByKidDate[k.id][dateStr]||[]).length+customLessonsFor(k.id,dateStr).length; return n?`<div class="mc-line ${k.id}"><span class="kid-badge ${k.id}" style="width:13px;height:13px;font-size:8px;">${k.initial}</span>${n}${dayHasPendingHw(k.id,dateStr)?' 📝':''}</div>`:''; }).join('')}
         ${Object.keys(calByCal).map(cid=>{
           const cal = calendarsData.find(c=>c.id===cid);
           return `<div class="mc-line" style="color:${cal?cal.color:'#888'}"><span class="cal-swatch" style="width:9px;height:9px;background:${cal?cal.color:'#888'}"></span>${calByCal[cid].length} ${escapeHtml(cal?cal.name:'')}</div>`;
@@ -1529,7 +1665,7 @@
           <label style="font-size:12.5px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;">Цвет:
             <input type="color" data-calcolor="${c.id}" value="${c.color}" style="width:34px;height:28px;padding:1px;">
           </label>
-          <b style="flex:1;">${escapeHtml(c.name)}</b>
+          <input type="text" data-calname="${c.id}" value="${escAttr(c.name)}" style="flex:1;min-width:120px;font-weight:700;padding:3px 6px;border:1px solid var(--paper-line);border-radius:6px;">
           <label style="font-size:12.5px;color:var(--ink-soft);">Кому:
             <select data-calkid="${c.id}" style="padding:3px 6px;border:1px solid var(--paper-line);border-radius:6px;">
               ${KIDS.map(k=>`<option value="${k.id}" ${ck===k.id?'selected':''}>${k.name}</option>`).join('')}
@@ -1649,7 +1785,7 @@
     <div class="gs-hint">Оценка показана числом, коэффициент — маленькой цифрой сверху (например 4² = оценка 4 с коэффициентом 2). Нажмите на оценку, чтобы увидеть дату, изменить её или удалить. Оценки можно ставить прямо в расписании — в окне урока. Запись вида 5/4 отображается как есть, а в средний балл идёт как две оценки (5 и 4), каждая с коэффициентом. Средний балл считается с учётом коэффициентов. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл стал строго больше 4,5. Оценки, которые выставляются, но не идут в триместровую, отмечаются галочкой «не в ср.» (или «Не учитывать…» в окне оценки и в расписании) — они подсвечиваются и не влияют на средний балл. Кнопкой 🗑 у предмета можно убрать его из оценивания, если по нему оценки не ставятся.</div>`;
 
     if(subjects.length===0 && excluded.length===0){
-      out += `<div class="empty-state">Предметов не найдено. Оценки собираются только из календарей «Петя_Лицей» и «Федя_Лицей» — добавьте туда уроки на вкладке «Настройка расписания».</div>`;
+      out += `<div class="empty-state">Предметов не найдено. Оценки собираются только из календарей «Лицей_Имя» — добавьте туда уроки на вкладке «Настройка расписания».</div>`;
       return out;
     }
 
@@ -1766,8 +1902,7 @@
         <button data-hwstatus="done" class="${hwFilterStatus==='done'?'active':''}">Сделано</button>
       </div>
       <div class="spacer"></div>
-      <button class="btn secondary" id="print-hw-petya">🖨 Печать — Петя</button>
-      <button class="btn secondary" id="print-hw-fedya">🖨 Печать — Федя</button>
+      ${KIDS.map(k=>`<button class="btn secondary" data-printhw="${k.id}">🖨 Печать — ${escapeHtml(k.name)}</button>`).join('')}
     </div>`;
 
     if(filtered.length===0){
@@ -3144,9 +3279,8 @@
     const mon = mondayOf(state.date);
     const days = [0,1,2,3,4,5,6].map(i=>{ const d=addDays(mon,i); return {date: iso(d), weekday: d.getDay()}; });
     const wb = new ExcelJS.Workbook();
-    buildScheduleSheet(wb, 'Расписание', days, ['petya','fedya'], true);
-    buildScheduleSheet(wb, 'Петя', days, ['petya'], false);
-    buildScheduleSheet(wb, 'Федя', days, ['fedya'], false);
+    buildScheduleSheet(wb, 'Расписание', days, KIDS.map(k=>k.id), true);
+    KIDS.forEach(k=>buildScheduleSheet(wb, k.name.slice(0,31), days, [k.id], false));
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const url = URL.createObjectURL(blob);
@@ -3197,7 +3331,7 @@
     });
     app.querySelectorAll('[data-addlesson]').forEach(el=>el.onclick=(e)=>{
       e.stopPropagation();
-      modalState = {kid:'petya', date:el.dataset.addlesson, isNew:true};
+      modalState = {kid:(KIDS[0]||{id:'me'}).id, date:el.dataset.addlesson, isNew:true};
       render();
     });
     app.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{
@@ -3698,10 +3832,8 @@
 
     const ps = document.getElementById('print-schedule');
     if(ps) ps.onclick = exportScheduleExcel;
-    const phP = document.getElementById('print-hw-petya');
-    if(phP) phP.onclick = ()=>printHomework('petya');
-    const phF = document.getElementById('print-hw-fedya');
-    if(phF) phF.onclick = ()=>printHomework('fedya');
+    app.querySelectorAll('[data-printhw]').forEach(el=>el.onclick=()=>printHomework(el.dataset.printhw));
+    if(typeof bindProfile==='function') bindProfile();
   }
 
   loadStorage();

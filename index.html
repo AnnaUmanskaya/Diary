@@ -485,6 +485,48 @@
 
     .lib-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;}
   }
+
+  /* ===== theme: cream paper, black accents, pastel blocks ===== */
+  :root{
+    --paper:#f6f0e1; --paper-line:#ddd4bf; --margin:#e46aa6;
+    --ink:#141414; --ink-soft:#6f6a5e; --card:#ece6d8;
+    --petya:#5b6fc7; --petya-soft:#c9d3f4; --fedya:#b88a00; --fedya-soft:#f4e08a;
+    --warn:#cf5038; --warn-soft:#f8e4de; --done:#3f8f6b; --done-soft:#dcefe5;
+    --gold:#b88a00; --gold-soft:#f6e7a6; --radius:18px;
+    --shadow:none;
+  }
+  body{background-image:none;padding-left:0;}
+  body::before{display:none;}
+  nav.tabs{border-bottom:none;gap:6px;flex-wrap:wrap;}
+  nav.tabs button{top:0;border-radius:999px;padding:8px 16px;background:transparent;}
+  nav.tabs button.active{background:#141414;color:#f6f0e1;border:none;}
+  .seg{background:var(--card);border:none;} .seg button.active{background:#141414;color:#f6f0e1;}
+  .navbtns button{background:var(--card);border:none;border-radius:50%;}
+  .navbtns .today{border-radius:999px;}
+  .btn{border-radius:999px;padding:8px 18px;background:#141414;color:#f6f0e1;}
+  .btn.secondary{background:transparent;border:1.5px solid #141414;color:#141414;}
+  .btn.danger{background:var(--warn);color:#fff;border:none;}
+  .btn.gold{background:var(--fedya-soft);color:#141414;}
+  .day-card,.reminder-form,.reminder-item,.legend,.week-daycard,.modal,.cal-row{border:none;}
+  .week-daycard{background:transparent;padding:0;}
+  .week-daycard .wd-head{background:#fbf8ee;border:none;border-radius:14px;padding:9px 0;margin-bottom:10px;}
+  .week-daycard .wd-head.today{background:#141414;color:#f6f0e1;}
+  .month-cell{background:var(--card);border:none;border-radius:14px;}
+  .month-cell.today{background:#141414;color:#f6f0e1;border:none;} .month-cell.today .mc-date{color:#f6f0e1;}
+  .month-cell.holiday{background:#f4e08a;}
+  .month-cell.other{opacity:.5;}
+  .cell-lesson,.wd-cell{border-radius:12px;} .ts-ev{border-radius:12px;}
+  .field input,.field select,.m-lib-pick select,.gm-row input,.lg-add input,.lg-add select{background:#fbf8ee;border:1px solid var(--paper-line);border-radius:10px;}
+  .banner{border-radius:12px;} .banner.holiday{background:#f4e08a;color:#141414;border:none;}
+  .banner.olympiad,.olympiad-banner{background:#f4e08a;border:none;color:#141414;border-radius:14px;}
+  .reminder-banner{background:#f6c9df;border:none;color:#141414;border-radius:14px;}
+  .warn-banner{background:#f4e08a;border:none;color:#141414;}
+  .m-file-chip,.m-file-attach-label,.lib-file-icon,.dup-pair,.weekday-picker label{background:#fbf8ee;}
+  .kid-tag{border-radius:999px;}
+  .modal-backdrop{background:rgba(20,20,20,.5);}
+  .empty-state{font-style:normal;}
+  .week-daycard .ts-hlabel{background:var(--paper);}
+  .ts-t{opacity:.65;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
@@ -539,11 +581,12 @@
   let fileLibraryData = []; // persistent registry of every uploaded homework file, independent of which homework entry currently references it
   let selectedRuleIds = new Set(); // multi-selected calendar rule ids in "Настройка расписания" for bulk edits
   let storageReady = false;
+  let wizStep = 0; // 0 = main app; 1 = choose calendars; 2 = choose children
   let childrenData = []; // {id,name,hex, archive?:{...snapshot of that child's data}}
   let groupsData = [];   // {id,kind:'kids'|'study'|'personal'|'work'|'custom',name}
   let currentUser = null, authMode = 'login', authMsg = '';
   const GROUP_KINDS = [['kids','Учебный (дети)'],['study','Учебный (личный)'],['personal','Личный'],['work','Рабочий']];
-  const KID_COLORS = ['#2e5a88','#3f7a4c','#a9761e','#8a3f9a','#b6483f','#2a8a8a'];
+  const KID_COLORS = ['#5b6fc7','#c99a00','#d4609f','#3f8f6b','#e07a4f','#141414'];
   const AUTO_CALS = [['lyceum','Лицей'],['extra','Доп.занятия'],['events','Мероприятия']];
   const newId = p => p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   function softOf(hex){ const n=parseInt(hex.slice(1),16); return '#'+[n>>16&255,n>>8&255,n&255].map(c=>Math.round(c+(255-c)*0.88).toString(16).padStart(2,'0')).join(''); }
@@ -874,8 +917,16 @@
   const SUPABASE_URL = 'https://kwldvtadmnbkifqtggnb.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3bGR2dGFkbW5ia2lmcXRnZ25iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1MDIxNjksImV4cCI6MjEwNDA3ODE2OX0.O3rYcWt_D-I2NfzChyswpnRaUZWFdhLmFp0G12KqbOU';
 
+  // «Запомнить меня»: сессия хранится в localStorage (остаётся после закрытия браузера),
+  // а если галочку снять — только в sessionStorage (до закрытия вкладки)
+  const rememberFlag = () => { try{ return localStorage.getItem('diary:remember')!=='0'; }catch(e){ return true; } };
+  const authStorage = {
+    getItem: k => { try{ const v = localStorage.getItem(k); return v!==null ? v : sessionStorage.getItem(k); }catch(e){ return null; } },
+    setItem: (k,v) => { try{ (rememberFlag()?localStorage:sessionStorage).setItem(k,v); (rememberFlag()?sessionStorage:localStorage).removeItem(k); }catch(e){} },
+    removeItem: k => { try{ localStorage.removeItem(k); sessionStorage.removeItem(k); }catch(e){} }
+  };
   const sb = (window.supabase && typeof window.supabase.createClient === 'function')
-    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:authStorage}})
     : null;
   let storageBackend = sb ? 'supabase' : 'local';
   const FILES_BUCKET = 'homework-files';
@@ -890,7 +941,7 @@
     linksData = p.links || []; excludedSubjectsData = p.excludedSubjects || {}; fileLibraryData = p.fileLibrary || [];
     childrenData = p.children || []; groupsData = p.groups || [];
     if(!p.children && !p.groups && (calendarsData.length || Object.keys(homeworkData).length)){ // data from the old two-kid version
-      childrenData = [{id:'petya',name:'Петя',hex:'#2e5a88'},{id:'fedya',name:'Федя',hex:'#3f7a4c'}];
+      childrenData = [{id:'petya',name:'Петя',hex:'#5b6fc7'},{id:'fedya',name:'Федя',hex:'#c99a00'}];
       groupsData = [{id:'g-kids',kind:'kids',name:'Учебный (дети)'}];
     }
   }
@@ -907,7 +958,7 @@
     }
     applyParsed(parsed || {});
     rebuildKids();
-    if(!groupsData.length) state.tab = 'profile';
+    wizStep = groupsData.length ? 0 : 1; state.tab = 'schedule';
     storageReady = true;
     render();
     if(parsed && !fromCloud){ await persistAll(); try{ localStorage.removeItem('diary:diary-data'); }catch(e){} }
@@ -919,7 +970,7 @@
       else {
         sb.auth.onAuthStateChange(ev=>{
           if(ev==='PASSWORD_RECOVERY'){ authMode='recovery'; storageReady=true; render(); }
-          if(ev==='SIGNED_OUT'){ currentUser=null; applyParsed({}); rebuildKids(); render(); }
+          if(ev==='SIGNED_OUT'){ currentUser=null; wizStep=0; applyParsed({}); rebuildKids(); render(); }
         });
         const { data } = await sb.auth.getSession();
         currentUser = data.session ? data.session.user : null;
@@ -991,8 +1042,9 @@
     const btn = {login:'Войти',register:'Зарегистрироваться',forgot:'Отправить ссылку на почту',recovery:'Сохранить пароль'}[m];
     return `<div style="max-width:380px;margin:40px auto;"><header class="top"><h1>Дневник</h1><div class="subtitle">${title}</div></header>
       <div class="day-card" style="padding:18px;">
-        ${m!=='recovery'?`<div class="field"><label>Email</label><input type="email" id="au-email" autocomplete="email"></div>`:''}
-        ${m!=='forgot'?`<div class="field" style="margin-top:10px;"><label>${m==='recovery'?'Новый пароль':'Пароль'}</label><input type="password" id="au-pass" autocomplete="${login?'current-password':'new-password'}"></div>`:''}
+        ${m!=='recovery'?`<div class="field"><label>Email</label><input type="email" id="au-email" name="email" autocomplete="username"></div>`:''}
+        ${m!=='forgot'?`<div class="field" style="margin-top:10px;"><label>${m==='recovery'?'Новый пароль':'Пароль'}</label><input type="password" id="au-pass" name="password" autocomplete="${login?'current-password':'new-password'}"></div>`:''}
+        ${(login||m==='register')?`<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;cursor:pointer;"><input type="checkbox" id="au-remember" ${rememberFlag()?'checked':''}> Запомнить меня</label>`:''}
         ${authMsg?`<div class="warn-banner" style="margin-top:12px;">${escapeHtml(authMsg)}</div>`:''}
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;"><button class="btn" id="au-go">${btn}</button>
           ${login?'<button class="btn secondary" id="au-reg">Создать аккаунт</button>':(m!=='recovery'?'<button class="btn secondary" id="au-back">Назад</button>':'')}</div>
@@ -1004,7 +1056,9 @@
     const setMode = (m,msg)=>()=>{ authMode=m; authMsg=msg||''; render(); };
     const on = (id,fn)=>{ const e=document.getElementById(id); if(e) e.onclick=ev=>{ ev.preventDefault(); fn(); }; };
     on('au-reg', setMode('register')); on('au-back', setMode('login')); on('au-forgot', setMode('forgot'));
+    const saveRemember = ()=>{ const r=document.getElementById('au-remember'); try{ if(r) localStorage.setItem('diary:remember', r.checked?'1':'0'); }catch(e){} };
     on('au-guest', async ()=>{
+      saveRemember();
       const { data, error } = await sb.auth.signInAnonymously();
       if(error){ authMsg='Гостевой вход недоступен: '+error.message; return render(); }
       currentUser = data.user; await loadUserData();
@@ -1013,7 +1067,7 @@
     go.onclick = async ()=>{
       const em = document.getElementById('au-email'), ps = document.getElementById('au-pass');
       const email = em ? em.value.trim() : '', password = ps ? ps.value : '';
-      authMsg = '';
+      authMsg = ''; saveRemember();
       if(authMode!=='recovery' && !email){ authMsg='Введите email.'; return render(); }
       if(authMode!=='forgot' && password.length<6){ authMsg='Пароль — не короче 6 символов.'; return render(); }
       if(authMode==='login'){
@@ -1075,28 +1129,43 @@
   }
   async function commitProfile(){ rebuildKids(); await persistAll(); render(); }
 
-  function renderProfileTab(){
+  function renderWizard(){
     const active = childrenData.filter(c=>!c.archive), archived = childrenData.filter(c=>c.archive);
     const missing = GROUP_KINDS.filter(([k])=>!groupsData.some(g=>g.kind===k));
-    const inp = 'padding:5px 8px;border:1px solid var(--paper-line);border-radius:6px;';
-    const guest = !!currentUser.is_anonymous, inp0 = 'padding:5px 8px;border:1px solid var(--paper-line);border-radius:6px;';
-    let o = `<div class="section-title">Аккаунт</div><div class="reminder-form"><b style="flex:1;">${guest?'Вы вошли как гость':escapeHtml(currentUser.email||'локальный режим (без входа)')}</b>${currentUser.id!=='local'?'<button class="btn secondary" id="au-logout">Выйти</button>':''}</div>`;
-    if(guest) o += `<div style="font-size:12.5px;color:var(--ink-soft);margin:-6px 0 8px;">Гостевые данные привязаны к этому браузеру: после выхода или очистки браузера они потеряются. Создайте аккаунт — все ваши данные сохранятся.</div>
-      <div class="reminder-form"><div class="field" style="flex:1;"><label>Email</label><input type="email" id="gu-email" style="${inp0}"></div><div class="field"><label>Пароль</label><input type="password" id="gu-pass" style="${inp0}"></div><button class="btn" id="gu-up">Создать аккаунт</button></div>`;
-    o += `<div class="section-title">Мои календари</div><div class="reminder-form">${missing.map(([k,n])=>`<button class="btn secondary" data-grpadd="${k}">+ ${n}</button>`).join('')}
-      <input type="text" id="grp-new" placeholder="Свой календарь, например «Спорт»" style="${inp}flex:1;min-width:200px;"><button class="btn" id="grp-add">Добавить</button></div>`;
-    if(!groupsData.length) o += `<div class="empty-state">Выберите, какие календари вам нужны.</div>`;
-    o += `<div class="cal-list">${groupsData.map(g=>`<div class="cal-row"><input type="text" data-grpname="${g.id}" value="${escAttr(g.name)}" style="flex:1;font-weight:700;${inp}"><button class="rdel" data-grpdel="${g.id}" title="Удалить календарь">✕</button></div>`).join('')}</div>`;
-    if(groupsData.some(g=>g.kind==='kids')){
-      o += `<div class="section-title">Дети</div><div class="reminder-form"><div class="field" style="flex:1;"><label>Имя ребёнка</label><input type="text" id="kid-new-name"></div>
+    const hasKids = groupsData.some(g=>g.kind==='kids');
+    const inp = 'padding:6px 9px;border:1px solid var(--paper-line);border-radius:6px;font-family:inherit;font-size:14px;';
+    const guest = !!currentUser.is_anonymous;
+    const first = wizStep===1, total = hasKids ? 2 : 1;
+    let o = `<div style="max-width:680px;margin:24px auto;"><header class="top"><h1>${childrenData.length||calendarsData.length?'Календари и дети':'Добро пожаловать!'}</h1><div class="subtitle">Шаг ${wizStep} из ${total}</div></header><div class="day-card" style="padding:18px;">`;
+    if(first){
+      o += `<div class="section-title" style="margin-top:0;">Какие календари вам нужны?</div>
+        <div class="reminder-form">${missing.map(([k,n])=>`<button class="btn secondary" data-grpadd="${k}">+ ${n}</button>`).join('')}</div>
+        <div class="reminder-form"><input type="text" id="grp-new" placeholder="Свой календарь, например «Спорт»" style="${inp}flex:1;min-width:200px;"><button class="btn" id="grp-add">Добавить</button></div>`;
+      o += groupsData.length ? `<div class="cal-list">${groupsData.map(g=>`<div class="cal-row"><input type="text" data-grpname="${g.id}" value="${escAttr(g.name)}" style="flex:1;font-weight:700;${inp}"><button class="rdel" data-grpdel="${g.id}" title="Убрать">✕</button></div>`).join('')}</div>` : `<div class="empty-state">Пока ничего не выбрано.</div>`;
+      if(guest) o += `<div class="section-title">Аккаунт</div>
+        <div class="reminder-form"><div class="field" style="flex:1;"><label>Email</label><input type="email" id="gu-email" style="${inp}"></div><div class="field"><label>Пароль</label><input type="password" id="gu-pass" style="${inp}"></div><button class="btn" id="gu-up">Создать аккаунт</button></div>`;
+      o += `<div style="display:flex;gap:8px;margin-top:16px;">${childrenData.length||calendarsData.length?'<button class="btn secondary" id="wiz-done">Закрыть</button>':'<button class="btn secondary" id="au-logout">Выйти</button>'}<div class="spacer"></div><button class="btn" id="wiz-next">${hasKids?'Далее':'Готово'}</button></div>`;
+    } else {
+      o += `<div class="section-title" style="margin-top:0;">Дети</div>
+        <div class="reminder-form"><div class="field" style="flex:1;"><label>Имя ребёнка</label><input type="text" id="kid-new-name" style="${inp}"></div>
         <div class="field"><label>Цвет</label><input type="color" id="kid-new-color" value="${KID_COLORS[active.length%KID_COLORS.length]}" style="width:52px;padding:2px;height:36px;"></div>
-        <button class="btn" id="kid-add">Добавить ребёнка</button></div>
-        <div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 12px;">Для каждого ребёнка автоматически создаются календари: Лицей_Имя, Доп.занятия_Имя, Мероприятия_Имя.</div>`;
-      o += active.length ? `<div class="cal-list">${active.map(c=>`<div class="cal-row"><input type="color" data-kidcolor="${c.id}" value="${c.hex}" style="width:34px;height:28px;padding:1px;"><input type="text" data-kidname="${c.id}" value="${escAttr(c.name)}" style="flex:1;font-weight:700;${inp}"><button class="btn secondary" data-kidarch="${c.id}">В архив</button></div>`).join('')}</div>` : `<div class="empty-state">Детей пока нет.</div>`;
-      if(archived.length) o += `<div class="section-title">Архив</div><div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 8px;">Данные архивных детей скрыты из расписания и вкладок, но сохранены — их можно восстановить.</div>
+        <button class="btn" id="kid-add">Добавить ребёнка</button></div>`;
+      o += active.length ? `<div class="cal-list">${active.map(c=>`<div class="cal-row"><input type="color" data-kidcolor="${c.id}" value="${c.hex}" style="width:34px;height:28px;padding:1px;"><input type="text" data-kidname="${c.id}" value="${escAttr(c.name)}" style="flex:1;font-weight:700;${inp}"><button class="btn secondary" data-kidarch="${c.id}">${c.id.length>0?'В архив':''}</button></div>`).join('')}</div>` : `<div class="empty-state">Детей пока нет.</div>`;
+      if(archived.length) o += `<div class="section-title">Архив</div>
         <div class="cal-list">${archived.map(c=>`<div class="cal-row"><b style="flex:1;color:var(--ink-soft);">${escapeHtml(c.name)}</b><span style="font-size:12px;color:var(--ink-soft);">в архиве с ${c.archive.at.slice(0,10)}</span><button class="btn secondary" data-kidrestore="${c.id}">Восстановить</button><button class="btn danger" data-kiddel="${c.id}">Удалить навсегда</button></div>`).join('')}</div>`;
+      o += `<div style="display:flex;gap:8px;margin-top:16px;"><button class="btn secondary" id="wiz-back">Назад</button><div class="spacer"></div><button class="btn" id="wiz-done">Готово</button></div>`;
     }
-    return o;
+    return o + `</div></div>`;
+  }
+  function bindWiz(){
+    const $ = id=>document.getElementById(id);
+    const finish = async ()=>{ wizStep = 0; state.tab = 'schedule'; rebuildKids(); await persistAll(); render(); };
+    if($('wiz-next')) $('wiz-next').onclick = ()=>{
+      if(!groupsData.length) return alert('Выберите или добавьте хотя бы один календарь.');
+      if(groupsData.some(g=>g.kind==='kids')){ wizStep = 2; render(); } else finish();
+    };
+    if($('wiz-back')) $('wiz-back').onclick = ()=>{ wizStep = 1; render(); };
+    if($('wiz-done')) $('wiz-done').onclick = ()=>{ if(!groupsData.length) return alert('Выберите или добавьте хотя бы один календарь.'); finish(); };
   }
   function bindProfile(){
     const $ = s=>app.querySelectorAll(s), by = (id,l)=>l.find(x=>x.id===id);
@@ -1104,6 +1173,7 @@
       if(currentUser.is_anonymous && !confirm('Вы гость: после выхода данные будут потеряны. Выйти?')) return;
       await sb.auth.signOut();
     };
+    const hs = document.getElementById('hdr-settings'); if(hs) hs.onclick = ()=>{ wizStep = 1; render(); };
     const gu = document.getElementById('gu-up'); if(gu) gu.onclick = async ()=>{
       const email = document.getElementById('gu-email').value.trim(), password = document.getElementById('gu-pass').value;
       if(!email || password.length<6) return alert('Введите email и пароль (не короче 6 символов).');
@@ -1160,9 +1230,9 @@
   function render(){
     if(!storageReady){ app.innerHTML = '<div class="loading">Загрузка дневника…</div>'; return; }
     if(!currentUser || authMode==='recovery'){ app.innerHTML = authHtml(); bindAuth(); return; }
+    if(wizStep){ app.innerHTML = renderWizard(); bindProfile(); bindWiz(); return; }
     let html = renderHeader() + renderTabs();
     if(state.tab==='schedule') html += renderScheduleTab();
-    else if(state.tab==='profile') html += renderProfileTab();
     else if(state.tab==='calsettings') html += renderCalSettingsTab();
     else if(state.tab==='homework') html += renderHomeworkTab();
     else if(state.tab==='grades') html += renderGradesTab();
@@ -1181,17 +1251,18 @@
       ? ' · синхронизация с Supabase активна'
       : ' · сохраняется только в этом браузере';
     return `<header class="top">
-      <div><h1>Дневник</h1><div class="subtitle">Расписание, домашние задания и напоминания${note}</div></div>
+      <div><h1>Дневник</h1></div>
+      <div style="display:flex;gap:8px;"><button class="btn secondary" id="hdr-settings">⚙ Календари и дети</button>${currentUser&&currentUser.id!=='local'?'<button class="btn secondary" id="au-logout">Выйти</button>':''}</div>
     </header>`;
   }
 
   function renderTabs(){
-    const tabs = [['schedule','Расписание'],['profile','Календари и дети'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады'],['olympiads','Олимпиады']];
+    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады'],['olympiads','Олимпиады']];
     return `<nav class="tabs">${tabs.map(([id,label])=>
       `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>`;
   }
 
-  function legendHtml(){
+  function legendHtml(){ return '';
     return `<div class="legend">
       <span class="litem">📝 задано ДЗ</span>
       <span class="litem">✅ ДЗ сделано</span>
@@ -1473,6 +1544,13 @@
       cl.forEach(ev=>{ ev.lanes = laneEnds.length; });
     });
   }
+  // columns actually drawn: only people who have at least one visible event in the shown period,
+  // so hiding a calendar (or having no lessons) lets the remaining columns take the freed width
+  let shownKids = [];
+  function pickShownKids(evList){
+    const f = KIDS.filter(k=>evList.some(ev=>(ev[k.id]||[]).length));
+    shownKids = f.length ? f : KIDS.slice();
+  }
   function tsEventsFor(dateStr){
     const ev = {};
     KIDS.forEach(k=>{ ev[k.id] = timelineEventsFor(k.id,dateStr); assignLanes(ev[k.id]); });
@@ -1498,7 +1576,7 @@
     const gradesEl = badges ? `<span class="ts-grades">${badges}</span>` : '';
     const hwEl = flag ? `<span class="ts-hw" title="${flag==='✅'?'Домашнее задание выполнено':'Есть домашнее задание'}">${flag}</span>` : '';
     // opaque base under the tint, so the hour lines never show through a lesson block
-    const tint = ev.color ? `background:linear-gradient(${ev.color}22,${ev.color}22),var(--card);` : '';
+    const tint = ev.color ? `background:color-mix(in srgb, ${ev.color} 30%, #fbf8ee);` : '';
     if(mode==='day'){
       const colorStyle = ev.color ? `${tint}border-left-color:${ev.color};` : `background:var(--${ev.kid}-soft);`;
       return `<div class="cell-lesson ts-ev ${ev.color?'':ev.kid}" ${ev.attr} data-dur="${dur}" title="${escAttr(title)}" style="${pos}${colorStyle}">
@@ -1506,7 +1584,7 @@
         ${hwEl}${gradesEl}${timeEl}
       </div>`;
     }
-    const colorStyle = ev.color ? `${tint}color:${ev.color};` : '';
+    const colorStyle = ev.color ? `${tint}color:#141414;` : '';
     return `<span class="wd-cell ts-ev ${ev.color?'':ev.kid}" ${ev.attr} data-dur="${dur}" title="${escAttr(title)}" style="${pos}${colorStyle}">
       <span class="wd-name">${escapeHtml(ev.subject)}</span>${hwEl}${gradesEl}${timeEl}
     </span>`;
@@ -1524,7 +1602,7 @@
     }
     return `<div class="ts-body ${mode}" data-basepph="${pph}" style="--pph:${pph}px;height:calc(var(--pph) * ${hours});">
       <div class="ts-gutter">${labels}</div>
-      <div class="ts-lanes">${KIDS.map(k=>`<div class="ts-lane">${(ev[k.id]||[]).map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>`).join('')}</div>
+      <div class="ts-lanes">${shownKids.map(k=>`<div class="ts-lane">${(ev[k.id]||[]).map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>`).join('')}</div>
       ${now}
     </div>`;
   }
@@ -1556,12 +1634,13 @@
   function renderDayView(){
     const dateStr = iso(state.date);
     const ev = tsEventsFor(dateStr);
+    pickShownKids([ev]);
     let body = dayBannersHtml(dateStr);
     if(!KIDS.some(k=>(ev[k.id]||[]).length)){
       body += `<div class="empty-state">Уроков нет</div>`;
     } else {
       const {startH,endH} = tsRange([ev]);
-      body += `<div class="ts-head"><span class="g"></span>${KIDS.map(k=>`<span class="k" style="color:${k.hex};">${escapeHtml(k.name)}</span>`).join('')}</div>`;
+      body += `<div class="ts-head"><span class="g"></span>${shownKids.map(k=>`<span class="k" style="color:${k.hex};">${escapeHtml(k.name)}</span>`).join('')}</div>`;
       body += tsBodyHtml(ev, dateStr, startH, endH, TS_PPH.day, 'day');
     }
     body += `<button class="btn secondary" style="margin-top:10px;" data-addlesson="${dateStr}">+ Добавить занятие</button>`;
@@ -1582,6 +1661,7 @@
       return lines;
     });
     const evs = days.map(d=>tsEventsFor(iso(d)));
+    pickShownKids(evs);
     const {startH,endH} = tsRange(evs);
     return `<div class="week-row">${days.map((d,idx)=>{
       const dateStr = iso(d);
@@ -1594,7 +1674,7 @@
         <div class="wd-period" style="border-bottom:none;padding:0 0 4px;">
           <div class="wd-ptime"></div>
           <div class="wd-pair" style="font-size:10px;font-weight:700;">
-            ${KIDS.map(k=>`<span style="flex:1;color:${k.hex};text-align:center;">${escapeHtml(k.name)}</span>`).join('')}
+            ${shownKids.map(k=>`<span style="flex:1;color:${k.hex};text-align:center;">${escapeHtml(k.name)}</span>`).join('')}
           </div>
         </div>
         ${inner}
@@ -1732,7 +1812,7 @@
         ${editRule?`<button class="btn secondary" id="cr-cancel">Отмена</button>`:''}
       </div>
     </div>
-    <div style="font-size:11.5px;color:var(--ink-soft);margin:-6px 0 12px;">Чтобы поменять расписание с какой-то даты в будущем: у старого урока укажите «Окончание периодичности» (последний день по старому расписанию), затем добавьте новый урок с новой периодичностью, начиная со следующей даты. Отметьте несколько уроков галочками ниже, чтобы применить массовое ограничение периодичности или удаление сразу ко всем выбранным.</div>`;
+`;
 
     if(rules.length===0){
       out += `<div class="empty-state">Уроков в этом календаре пока нет.</div>`;
@@ -1781,8 +1861,7 @@
       <span class="spacer"></span>
       ${(()=>{ let n=0; subjects.forEach(sj=>{ n += gradesFor(gradesKid, sj, gradesTri).length; }); return n>0 ? `<button class="btn secondary" id="grades-clear" style="color:var(--warn);border-color:var(--warn);">Удалить все оценки (${n})</button>` : ''; })()}
     </div>
-    <div class="gs-legend"><span class="gs-chip"><span class="gs-chip-val">5</span><sup>1</sup></span> учитывается в среднем <span class="gs-chip nocount"><span class="gs-chip-val">5</span><sup>1</sup></span> не учитывается в триместровой оценке (серо-синяя, пунктир)</div>
-    <div class="gs-hint">Оценка показана числом, коэффициент — маленькой цифрой сверху (например 4² = оценка 4 с коэффициентом 2). Нажмите на оценку, чтобы увидеть дату, изменить её или удалить. Оценки можно ставить прямо в расписании — в окне урока. Запись вида 5/4 отображается как есть, а в средний балл идёт как две оценки (5 и 4), каждая с коэффициентом. Средний балл считается с учётом коэффициентов. «Нужно 5-ок» — сколько дополнительных пятёрок (вес 1) нужно получить, чтобы средний балл стал строго больше 4,5. Оценки, которые выставляются, но не идут в триместровую, отмечаются галочкой «не в ср.» (или «Не учитывать…» в окне оценки и в расписании) — они подсвечиваются и не влияют на средний балл. Кнопкой 🗑 у предмета можно убрать его из оценивания, если по нему оценки не ставятся.</div>`;
+`;
 
     if(subjects.length===0 && excluded.length===0){
       out += `<div class="empty-state">Предметов не найдено. Оценки собираются только из календарей «Лицей_Имя» — добавьте туда уроки на вкладке «Настройка расписания».</div>`;
@@ -1856,7 +1935,6 @@
     if(pairs.length===0) return '';
     return `<div class="dup-warning">
       <div class="dup-warning-title">⚠ Найдено задвоенных записей домашнего задания: ${pairs.length}</div>
-      <div class="dup-warning-sub">Это старые записи, оставшиеся от одного и того же урока, который до недавнего исправления сохранялся под двумя разными записями. Выберите для каждой пары, какую версию оставить — вторая будет удалена (файлы всё равно останутся в библиотеке).</div>
       ${pairs.map((p,i)=>{
         const a = homeworkData[p.legacyKey] || {text:'',done:false,files:[]};
         const b = homeworkData[p.modernKey] || {text:'',done:false,files:[]};
@@ -1960,7 +2038,6 @@
     if(orphaned.length===0) return '';
     orphaned.sort((a,b)=> (b.date+b.start).localeCompare(a.date+a.start));
     return `<div class="section-title" style="margin-top:26px;">Сохранённые записи вне расписания (${orphaned.length})</div>
-    <div class="gs-hint">Урок, к которому относились эти записи, был изменён, укорочен по сроку или удалён из «Настройки расписания» — сами записи домашнего задания не потерялись и хранятся здесь. Прикреплённые файлы всегда доступны в «Библиотеке» независимо от этого списка.</div>
     <div class="hw-list">${orphaned.map(e=>{
       const [y,m,d] = e.date.split('-');
       const dateLabel = d+' '+MONTHS_GEN[parseInt(m,10)-1]+' '+y;
@@ -2233,7 +2310,6 @@
     filtered.sort((a,b)=> (b.addedAt||0)-(a.addedAt||0));
 
     let out = migrationBannerHtml();
-    out += `<div class="gs-hint">Здесь хранятся все файлы, когда-либо прикреплённые к домашним заданиям — они остаются тут, даже если урок изменили, перенесли или удалили. Их можно заново прикрепить к любому домашнему заданию через «выбрать файл из библиотеки».</div>`;
     out += `<div class="filters"><div class="seg">
       <button data-libkid="all" class="${libFilterKid==='all'?'active':''}">Все</button>
       ${KIDS.map(k=>`<button data-libkid="${k.id}" class="${libFilterKid===k.id?'active':''}">${k.name}</button>`).join('')}
@@ -2671,7 +2747,6 @@
         <button type="button" class="btn gold" id="lg-add">Поставить</button>
       </div>
       <label class="m-check-nc"><input type="checkbox" id="lg-nc"> Не учитывать в триместровой оценке</label>
-      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:6px;">Оценка сохраняется сразу и попадает на вкладку «Оценки» с датой урока. Запись 5/4 считается как две оценки с указанным коэффициентом.</div>
     </div>`;
   }
   function wireLessonGrades(ctx){
@@ -2739,14 +2814,6 @@
       <div class="m-sub">${kidObj.name} · ${tri}-й триместр</div>
       <div style="font-family:'PT Serif',serif;font-size:34px;font-weight:700;line-height:1.1;">${escapeHtml(gradeLabel(g))}<sup style="font-size:14px;color:var(--ink-soft);margin-left:3px;">×${escapeHtml(String(g.weight))}</sup></div>
       <div style="margin:6px 0 4px;font-size:14px;">📅 Дата оценки: <b>${escapeHtml(dateTxt)}</b>${escapeHtml(lessonTxt)}</div>
-      ${(()=>{
-        if(!g.date) return `<div style="font-size:12px;color:var(--ink-soft);">Укажите дату — тогда оценка появится в расписании на уроке этого предмета в этот день.</div>`;
-        const st = g.start || firstLessonStartFor(kid, subject, g.date);
-        return st ? `<div style="font-size:12px;color:var(--ink-soft);">В расписании: урок «${escapeHtml(subject)}» в ${escapeHtml(st)}.</div>`
-                  : `<div style="font-size:12px;color:var(--warn);">В расписании в этот день нет урока «${escapeHtml(subject)}», поэтому оценка там не показана.</div>`;
-      })()}
-      ${g.noCount?`<div style="font-size:12px;color:#4a5a73;background:#e9edf3;border-radius:6px;padding:4px 8px;margin-top:4px;">Эта оценка не учитывается в среднем балле триместра.</div>`:''}
-      ${two&&!g.noCount?`<div style="font-size:12px;color:var(--ink-soft);">В средний балл идёт как две оценки: ${escapeHtml(String(g.value))} и ${escapeHtml(String(g.value2))}, каждая с коэффициентом ${escapeHtml(String(g.weight))}.</div>`:''}
       <div class="gm-row" style="margin-top:12px;">
         <div class="field" style="flex:1.2;"><label>Оценка</label><input type="text" id="gm-val" inputmode="numeric" maxlength="7" value="${escAttr(gradeLabel(g).replace(',','.'))}"></div>
         <div class="field"><label>Коэффициент</label><input type="number" id="gm-w" min="1" step="1" value="${escAttr(String(g.weight))}"></div>
@@ -2824,7 +2891,6 @@
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
       ${fileAttachSectionHtml(hw.files||[], kid)}
       ${lessonGradeSectionHtml({kid,subject:subj,date,start})}
-      ${(!custom)?`<div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Если поменяли предмет — выберите, применить изменение только к этому дню или ко всем таким же урокам начиная с этой недели.</div>`:''}
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
         <div class="right">
@@ -2929,7 +2995,6 @@
     div.id = 'modal-backdrop';
     div.innerHTML = `<div class="modal">
       <h3>Добавить занятие</h3>
-      <div class="m-sub">Дополнительные занятия, кружки, репетиторы и т.п.</div>
       <label class="m-label">Кому</label>
       <select id="m-kid" style="width:100%;padding:8px 9px;border:1px solid var(--paper-line);border-radius:7px;font-family:inherit;font-size:14px;">
         ${KIDS.map(k=>`<option value="${k.id}" ${k.id===kid?'selected':''}>${k.name}</option>`).join('')}
@@ -2994,7 +3059,6 @@
       <label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''}> Выполнено</label>
       ${fileAttachSectionHtml(hw.files||[], cal.kid)}
       ${lessonGradeSectionHtml({kid:cal.kid,subject,date,start,cal})}
-      <div style="font-size:11.5px;color:var(--ink-soft);margin-top:10px;">Чтобы изменить предмет, время или периодичность этого урока — используйте вкладку «Настройка расписания».</div>
       <div class="m-actions">
         <button class="btn secondary" id="m-close">Закрыть</button>
         <div class="right"><button class="btn" id="m-save">Сохранить</button></div>

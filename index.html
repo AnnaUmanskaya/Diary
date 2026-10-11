@@ -576,7 +576,8 @@
   .side{width:244px;flex-basis:244px;} .main{padding:30px 28px 60px;}
   .ro [data-addlesson],.ro [data-gradeadd],.ro [data-gradedel],.ro [data-subjdel],.ro [data-subjrestore],.ro #grades-clear,.ro .reminder-form,.ro .rdel{display:none !important;}
   .ro [data-hworphandel]{display:none !important;}
-  .ro [data-hwtoggle],.ro [data-hwtoggle-cal],.ro [data-hwedit],.ro [data-hwedit-cal]{pointer-events:none;}
+  .ro [data-hwedit],.ro [data-hwedit-cal],.ro:not(.canmark) [data-hwtoggle],.ro:not(.canmark) [data-hwtoggle-cal]{pointer-events:none;}
+  .ro .warn-banner{display:none;}
   .cal-row a{color:var(--navy);text-decoration:none;}
   @media (max-width:860px){
     .shell{flex-direction:column;} .side{width:auto;flex:none;height:auto;position:static;}
@@ -639,6 +640,7 @@
   let fileLibraryData = []; // persistent registry of every uploaded homework file, independent of which homework entry currently references it
   let selectedRuleIds = new Set(); // multi-selected calendar rule ids in "Настройка расписания" for bulk edits
   let storageReady = false;
+  let viewerAccess = null, viewerCanMark = false;
   let viewerMode = false, sharesData = [], sharePushed = {}, syncing = false, syncAgain = false; // viewerMode = child's read-only cabinet
   let wizStep = 0; // 0 = main app; 1 = choose calendars; 2 = choose children
   let childrenData = []; // {id,name,hex, archive?:{...snapshot of that child's data}}
@@ -1006,7 +1008,7 @@
   }
   async function loadUserData(){
     viewerMode = false; sharesData = []; sharePushed = {};
-    let parsed = null, fromCloud = false;
+    let parsed = null, fromCloud = false, needSave = false;
     try {
       if(!sb) throw new Error('Supabase клиент недоступен');
       const { data, error } = await sb.from('app_state').select('data').eq('key', stateKey()).maybeSingle();
@@ -1018,16 +1020,23 @@
     }
     applyParsed(parsed || {});
     if(!(groupsData.length || childrenData.length || calendarsData.length) && sb && currentUser.id!=='local'){
-      try { const { data: vs } = await sb.rpc('my_child_views'); if(vs && vs.length){ enterViewer(vs[0]); return; } } catch(e){ console.warn(e); }
+      try { const { data: vs } = await sb.rpc('my_child_views'); if(vs && vs.length){ await enterViewer(vs[0]); return; } } catch(e){ console.warn(e); }
     }
     if(sb && currentUser.id!=='local' && !currentUser.is_anonymous){
-      try { const { data: sh } = await sb.from('child_access').select('id,child_id,email'); sharesData = sh || []; } catch(e){}
+      try { const { data: sh } = await sb.from('child_access').select('id,child_id,email,can_mark_done'); sharesData = sh || []; } catch(e){}
+      try { // отметки ДЗ от детей: принимаем и очищаем очередь
+        const { data: mk } = await sb.from('child_hw_marks').select('access_id,key,done');
+        if(mk && mk.length){
+          mk.forEach(m=>{ const e = homeworkData[m.key]; if(e && !!e.done!==m.done){ e.done = m.done; needSave = true; } });
+          await Promise.all(mk.map(m=>sb.from('child_hw_marks').delete().eq('access_id',m.access_id).eq('key',m.key)));
+        }
+      } catch(e){}
     }
     rebuildKids();
     wizStep = groupsData.length ? 0 : 1; state.tab = 'schedule';
     storageReady = true;
     render();
-    syncShares();
+    if(needSave) await persistAll(); else syncShares();
     if(parsed && !fromCloud){ await persistAll(); try{ localStorage.removeItem('diary:diary-data'); }catch(e){} }
   }
   async function loadStorage(){
@@ -1170,6 +1179,7 @@
       customLessons:customLessonsData.filter(x=>x.kid===id), recurringOverrides:recurringOverridesData.filter(x=>x.kid===id),
       overrides:only(overridesData,k=>k.startsWith(id+'|')),
       homework:only(homeworkData,k=>k.startsWith(id+'|') || ids.some(i=>k.startsWith('cal|'+i+'|'))),
+      fileLibrary:fileLibraryData.filter(f=>mine(f.kid)),
       grades:{[id]:gradesData[id]||{}}, excludedSubjects:{[id]:excludedSubjectsData[id]||[]}
     };
   }
@@ -1189,11 +1199,22 @@
       } while(syncAgain);
     } finally { syncing = false; }
   }
-  function enterViewer(row){
+  async function enterViewer(row){
     const sn = row.snapshot || {}, ch = sn.child || {id:row.child_id, name:row.child_name||'Ученик', hex:'#5b6fc7'};
     viewerMode = true;
     applyParsed({...sn, children:[ch], groups:[{id:'g-kids',kind:'kids',name:'Учебный (дети)'}]});
+    viewerAccess = row.id; viewerCanMark = !!row.can_mark_done;
+    try { // отметки «выполнено», которые ребёнок поставил, а родитель ещё не принял
+      const { data: ms } = await sb.rpc('my_child_marks');
+      (ms||[]).filter(m=>m.access_id===row.id).forEach(m=>{ if(homeworkData[m.key]) homeworkData[m.key].done = m.done; });
+    } catch(e){}
     rebuildKids(); wizStep = 0; state.tab = 'schedule'; storageReady = true; render();
+  }
+  async function commitDone(key){
+    if(!viewerMode) return persistAll();
+    if(!viewerCanMark){ homeworkData[key].done = !homeworkData[key].done; return; }
+    const { error } = await sb.rpc('set_homework_done', {p_access:viewerAccess, p_key:key, p_done:!!homeworkData[key].done});
+    if(error){ homeworkData[key].done = !homeworkData[key].done; alert('Не удалось сохранить отметку: '+error.message); }
   }
   const mailHref = (email,name)=>'mailto:'+email+'?subject='+encodeURIComponent('Доступ к дневнику')+'&body='+encodeURIComponent('Привет, '+name+'! Откройте дневник: '+location.href.split('#')[0]+' — создайте аккаунт или войдите под этой почтой ('+email+'), и вы увидите своё расписание, оценки и олимпиады.');
 
@@ -1262,7 +1283,7 @@
         <div class="cal-list">${archived.map(c=>`<div class="cal-row"><b style="flex:1;color:var(--ink-soft);">${escapeHtml(c.name)}</b><span style="font-size:12px;color:var(--ink-soft);">в архиве с ${c.archive.at.slice(0,10)}</span><button class="btn secondary" data-kidrestore="${c.id}">Восстановить</button><button class="btn danger" data-kiddel="${c.id}">Удалить навсегда</button></div>`).join('')}</div>`;
       if(sb && currentUser.id!=='local' && !currentUser.is_anonymous && active.length) o += `<div class="section-title">Доступ детей</div><div class="cal-list">${active.map(c=>{
         const rows = sharesData.filter(r=>r.child_id===c.id);
-        return `<div class="cal-row" style="flex-wrap:wrap;"><b style="flex:1 1 100%;">${escapeHtml(c.name)}</b>${rows.map(r=>`<span style="background:#ecebe6;border-radius:999px;padding:4px 12px;display:inline-flex;gap:10px;align-items:center;">${escapeHtml(r.email)} <a href="${mailHref(r.email,c.name)}" title="Отправить приглашение">✉</a> <a href="#" data-sharedel="${r.id}" title="Закрыть доступ">✕</a></span>`).join('')}<input type="email" id="sh-${c.id}" placeholder="Email ребёнка" style="${inp}flex:1;min-width:180px;"><button class="btn" data-shareadd="${c.id}">Дать доступ</button></div>`; }).join('')}</div>`;
+        return `<div class="cal-row" style="flex-wrap:wrap;"><b style="flex:1 1 100%;">${escapeHtml(c.name)}</b>${rows.map(r=>`<span style="background:#ecebe6;border-radius:999px;padding:4px 12px;display:inline-flex;gap:10px;align-items:center;">${escapeHtml(r.email)} <label title="Может отмечать домашние задания выполненными" style="cursor:pointer;display:inline-flex;gap:4px;align-items:center;font-size:13px;"><input type="checkbox" data-sharemark="${r.id}" ${r.can_mark_done?'checked':''}> отмечает ДЗ</label> <a href="${mailHref(r.email,c.name)}" title="Отправить приглашение">✉</a> <a href="#" data-sharedel="${r.id}" title="Закрыть доступ">✕</a></span>`).join('')}<input type="email" id="sh-${c.id}" placeholder="Email ребёнка" style="${inp}flex:1;min-width:180px;"><label style="cursor:pointer;display:inline-flex;gap:6px;align-items:center;font-size:14px;"><input type="checkbox" id="sm-${c.id}"> может отмечать ДЗ</label><button class="btn" data-shareadd="${c.id}">Дать доступ</button></div>`; }).join('')}</div>`;
       o += `<div style="display:flex;gap:8px;margin-top:16px;"><button class="btn secondary" id="wiz-back">Назад</button><div class="spacer"></div><button class="btn" id="wiz-done">Готово</button></div>`;
     }
     return o + `</div></div>`;
@@ -1288,7 +1309,7 @@
       if(!c || !/^\S+@\S+\.\S+$/.test(email)) return alert('Введите корректный email.');
       if(sharesData.some(r=>r.child_id===id && r.email===email)) return;
       const snap = buildChildSnapshot(id);
-      const { data, error } = await sb.from('child_access').insert({owner_id:currentUser.id, child_id:id, child_name:c.name, email, snapshot:snap}).select('id,child_id,email').single();
+      const { data, error } = await sb.from('child_access').insert({owner_id:currentUser.id, child_id:id, child_name:c.name, email, snapshot:snap, can_mark_done:!!document.getElementById('sm-'+id).checked}).select('id,child_id,email,can_mark_done').single();
       if(error) return alert('Не удалось дать доступ: '+error.message);
       sharesData.push(data); sharePushed[data.id] = JSON.stringify(snap); render();
     });
@@ -1298,6 +1319,11 @@
       const { error } = await sb.from('child_access').delete().eq('id',el.dataset.sharedel);
       if(error) return alert('Не удалось: '+error.message);
       sharesData = sharesData.filter(r=>r.id!==el.dataset.sharedel); render();
+    });
+    $('[data-sharemark]').forEach(el=>el.onchange=async ()=>{
+      const { error } = await sb.from('child_access').update({can_mark_done:el.checked}).eq('id',el.dataset.sharemark);
+      if(error){ el.checked = !el.checked; return alert('Не удалось: '+error.message); }
+      const r = sharesData.find(x=>x.id===el.dataset.sharemark); if(r) r.can_mark_done = el.checked;
     });
     const hs = document.getElementById('hdr-settings'); if(hs) hs.onclick = ()=>{ wizStep = 1; render(); };
     const gu = document.getElementById('gu-up'); if(gu) gu.onclick = async ()=>{
@@ -1383,13 +1409,13 @@
     ['reminders','Напоминания и олимпиады','<path d="M6 9a6 6 0 0112 0c0 6 2 7 2 7H4s2-1 2-7zM10 20a2 2 0 004 0"/>'],
     ['olympiads','Олимпиады','<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a4 4 0 004 4M16 6h4v1a4 4 0 01-4 4M12 13v4M8 21h8M10 17h4"/>']];
   function renderShell(content){
-    const tabs = viewerMode ? TABS.filter(t=>['schedule','homework','grades','olympiads'].includes(t[0])) : TABS;
+    const tabs = viewerMode ? TABS.filter(t=>['schedule','homework','grades','library','olympiads'].includes(t[0])) : TABS;
     const cur = tabs.find(t=>t[0]===state.tab) || tabs[0];
     const em = (currentUser && currentUser.email) || '';
     const ini = currentUser && currentUser.is_anonymous ? 'Г' : (em ? em.slice(0,2).toUpperCase() : 'ДН');
     const ico = d=>`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
     const out = currentUser && currentUser.id!=='local';
-    return `<div class="shell${viewerMode?' ro':''}"><aside class="side"><div class="brand"><span class="logo">${ico('<circle cx="12" cy="12" r="8"/><path d="M8.5 12.3l2.5 2.5 4.5-5"/>')}</span>Дневник</div>
+    return `<div class="shell${viewerMode?' ro'+(viewerCanMark?' canmark':''):''}"><aside class="side"><div class="brand"><span class="logo">${ico('<circle cx="12" cy="12" r="8"/><path d="M8.5 12.3l2.5 2.5 4.5-5"/>')}</span>Дневник</div>
       <nav class="sidenav">${tabs.map(([id,label,d])=>`<button data-tab="${id}" class="${state.tab===id?'active':''}">${ico(d)}<span>${label}</span></button>`).join('')}</nav>
       <div class="side-foot">${viewerMode?'':`<button id="hdr-settings">${ico('<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.5 3-5.5 6-5.5s6 2 6 5.5M17 6v6M14 9h6"/>')}<span>Календари и дети</span></button>`}${out?`<button id="au-logout">${ico('<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>')}<span>Выйти</span></button>`:''}</div></aside>
       <main class="main"><div class="topbar"><div><div class="eyebrow">${viewerMode?'Кабинет ученика':'Личный кабинет'}</div><h1>${cur[1]}</h1></div><div class="avatar" title="${escAttr(em||'Гость')}">${escapeHtml(ini)}</div></div>${content}</main></div>`;
@@ -3571,7 +3597,7 @@
       const key = keyOf(kid,date,start);
       if(homeworkData[key]){
         homeworkData[key].done = !homeworkData[key].done;
-        await persistAll();
+        await commitDone(key);
         render();
       }
     });
@@ -3587,7 +3613,7 @@
       const key = resolveHwKey(calendarId,ruleId||null,date,start);
       if(homeworkData[key]){
         homeworkData[key].done = !homeworkData[key].done;
-        await persistAll();
+        await commitDone(key);
         render();
       }
     });

@@ -575,6 +575,7 @@
   .week-daycard{flex:0 0 214px;min-width:214px;}
   .side{width:244px;flex-basis:244px;} .main{padding:30px 28px 60px;}
   .ro [data-addlesson],.ro [data-gradeadd],.ro [data-gradedel],.ro [data-subjdel],.ro [data-subjrestore],.ro #grades-clear,.ro .reminder-form,.ro .rdel{display:none !important;}
+  .ro [data-hworphandel]{display:none !important;}
   .ro [data-hwtoggle],.ro [data-hwtoggle-cal],.ro [data-hwedit],.ro [data-hwedit-cal]{pointer-events:none;}
   .cal-row a{color:var(--navy);text-decoration:none;}
   @media (max-width:860px){
@@ -1382,7 +1383,7 @@
     ['reminders','Напоминания и олимпиады','<path d="M6 9a6 6 0 0112 0c0 6 2 7 2 7H4s2-1 2-7zM10 20a2 2 0 004 0"/>'],
     ['olympiads','Олимпиады','<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a4 4 0 004 4M16 6h4v1a4 4 0 01-4 4M12 13v4M8 21h8M10 17h4"/>']];
   function renderShell(content){
-    const tabs = viewerMode ? TABS.filter(t=>['schedule','grades','olympiads'].includes(t[0])) : TABS;
+    const tabs = viewerMode ? TABS.filter(t=>['schedule','homework','grades','olympiads'].includes(t[0])) : TABS;
     const cur = tabs.find(t=>t[0]===state.tab) || tabs[0];
     const em = (currentUser && currentUser.email) || '';
     const ini = currentUser && currentUser.is_anonymous ? 'Г' : (em ? em.slice(0,2).toUpperCase() : 'ДН');

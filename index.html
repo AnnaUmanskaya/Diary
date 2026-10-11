@@ -526,7 +526,64 @@
   .modal-backdrop{background:rgba(20,20,20,.5);}
   .empty-state{font-style:normal;}
   .week-daycard .ts-hlabel{background:var(--paper);}
+  .ts-lanes{position:relative;}
+  .ts-bgl{position:absolute;inset:0;z-index:0;}
+  .ts-lane{z-index:1;pointer-events:none;}
+  .ts-lane .ts-ev{pointer-events:auto;}
   .ts-t{opacity:.65;}
+
+  /* ===== theme v2: navy sidebar, light content, white rounded cards, gold accent ===== */
+  :root{
+    --navy:#111a2e; --navy-2:#1d2840; --gold:#f2b01e; --gold-soft:#fdecc4;
+    --paper:#f5f5f3; --paper-line:#e4e2dc; --card:#ffffff; --ink:#111a2e; --ink-soft:#6b7280;
+    --margin:#f2b01e; --warn:#c2410c; --warn-soft:#fdf1e3; --done:#2f8a5f; --done-soft:#e1f2e9;
+    --petya-soft:#dbe3fb; --fedya-soft:#fdecc4;
+  }
+  body{background:var(--paper);font-family:'PT Sans',system-ui,sans-serif;}
+  #app.wrap{max-width:none;margin:0;padding:0;}
+  .shell{display:flex;min-height:100vh;}
+  .side{width:260px;flex:0 0 260px;background:var(--navy);color:#c9cfdc;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
+  .brand{display:flex;align-items:center;gap:12px;padding:22px 22px;font-family:'PT Serif',Georgia,serif;font-size:22px;font-weight:700;color:#fff;border-bottom:1px solid #222d45;}
+  .brand .logo{color:var(--gold);display:flex;}
+  .sidenav{padding:14px 12px;display:flex;flex-direction:column;gap:4px;flex:1;overflow-y:auto;}
+  .sidenav button,.side-foot button{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:transparent;border:none;color:#c9cfdc;font:inherit;font-size:15.5px;padding:12px 14px;border-radius:12px;cursor:pointer;}
+  .sidenav button:hover,.side-foot button:hover{background:#18233a;}
+  .sidenav button.active{background:var(--navy-2);color:#fff;} .sidenav button.active svg{color:var(--gold);}
+  .side-foot{padding:12px;border-top:1px solid #222d45;display:flex;flex-direction:column;gap:2px;}
+  .main{flex:1;min-width:0;padding:34px 40px 60px;max-width:1280px;}
+  .topbar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;gap:12px;}
+  .eyebrow{font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:#6b7280;margin-bottom:6px;}
+  .topbar h1{font-family:'PT Serif',Georgia,serif;font-size:36px;line-height:1.15;margin:0;color:var(--navy);font-weight:700;}
+  .avatar{width:48px;height:48px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'PT Serif',serif;font-weight:700;font-size:16px;flex:0 0 auto;}
+  .day-card,.reminder-form,.reminder-item,.modal,.month-cell,.cal-row,.dup-pair{background:#fff;border:1px solid var(--paper-line);border-radius:18px;}
+  .reminder-form{padding:16px;} .legend,.seg{background:#ecebe6;border:none;}
+  .btn{background:var(--navy);color:#fff;border-radius:12px;}
+  .btn.secondary{background:#fff;color:var(--navy);border:1px solid #cfcdc4;}
+  .seg button.active{background:var(--navy);color:#fff;}
+  .navbtns button{background:#fff;border:1px solid var(--paper-line);}
+  .week-daycard .wd-head{background:#fff;border:1px solid var(--paper-line);}
+  .week-daycard .wd-head.today,.month-cell.today{background:var(--navy);color:#fff;}
+  .month-cell.today .mc-date{color:#fff;}
+  .month-cell.holiday,.banner.holiday{background:var(--gold-soft);}
+  .olympiad-banner,.banner.olympiad,.warn-banner{background:#fdf6e3;border:1px solid #f0d58c;color:#7a3e0a;border-radius:14px;}
+  .reminder-banner{background:#fdf1e3;border:1px solid #f3cfa6;color:#7a3e0a;}
+  .field input,.field select{background:#fff;border:1px solid #d8d6ce;border-radius:10px;}
+  .section-title{font-family:'PT Serif',Georgia,serif;color:var(--navy);}
+  .week-daycard .ts-hlabel{background:var(--paper);}
+  .ts-now,.ts-nowline{--now:var(--gold);}
+  .ts-body{background-image:repeating-linear-gradient(to bottom, #dcdad2 0, #dcdad2 1px, transparent 1px, transparent var(--pph)),repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--pph) / 2), #ecebe6 calc(var(--pph) / 2), #ecebe6 calc(var(--pph) / 2 + 1px), transparent calc(var(--pph) / 2 + 1px), transparent var(--pph));}
+  .week-daycard{flex:0 0 214px;min-width:214px;}
+  .side{width:244px;flex-basis:244px;} .main{padding:30px 28px 60px;}
+  .ro [data-addlesson],.ro [data-gradeadd],.ro [data-gradedel],.ro [data-subjdel],.ro [data-subjrestore],.ro #grades-clear,.ro .reminder-form,.ro .rdel{display:none !important;}
+  .ro [data-hwtoggle],.ro [data-hwtoggle-cal],.ro [data-hwedit],.ro [data-hwedit-cal]{pointer-events:none;}
+  .cal-row a{color:var(--navy);text-decoration:none;}
+  @media (max-width:860px){
+    .shell{flex-direction:column;} .side{width:auto;flex:none;height:auto;position:static;}
+    .brand{padding:12px 16px;font-size:18px;} .sidenav{flex-direction:row;overflow-x:auto;padding:8px;}
+    .sidenav button{white-space:nowrap;width:auto;padding:9px 12px;font-size:14px;} .side-foot{flex-direction:row;padding:6px 8px;}
+    .side-foot button{width:auto;padding:8px 10px;font-size:13px;} .main{padding:18px 12px 40px;} .topbar h1{font-size:26px;}
+  }
+  @media print{.side,.topbar{display:none !important;} .main{padding:0;}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
@@ -581,6 +638,7 @@
   let fileLibraryData = []; // persistent registry of every uploaded homework file, independent of which homework entry currently references it
   let selectedRuleIds = new Set(); // multi-selected calendar rule ids in "Настройка расписания" for bulk edits
   let storageReady = false;
+  let viewerMode = false, sharesData = [], sharePushed = {}, syncing = false, syncAgain = false; // viewerMode = child's read-only cabinet
   let wizStep = 0; // 0 = main app; 1 = choose calendars; 2 = choose children
   let childrenData = []; // {id,name,hex, archive?:{...snapshot of that child's data}}
   let groupsData = [];   // {id,kind:'kids'|'study'|'personal'|'work'|'custom',name}
@@ -753,7 +811,7 @@
     const map = {};
     calOccurrencesForDate(dateStr).forEach(o=>{
       const m = map[o.start] = map[o.start] || {};
-      KIDS.forEach(k=>{ if(o.kid===k.id || o.kid==='both') (m[k.id]=m[k.id]||[]).push(o); });
+      KIDS.forEach(k=>{ if(o.kid===k.id || (o.kid==='both' && k.id!=='me')) (m[k.id]=m[k.id]||[]).push(o); });
     });
     return Object.keys(map).sort().map(start=>({start, by:map[start]}));
   }
@@ -946,6 +1004,7 @@
     }
   }
   async function loadUserData(){
+    viewerMode = false; sharesData = []; sharePushed = {};
     let parsed = null, fromCloud = false;
     try {
       if(!sb) throw new Error('Supabase клиент недоступен');
@@ -957,10 +1016,17 @@
       try { const l = localStorage.getItem(lsKey()) || localStorage.getItem('diary:diary-data'); if(l) parsed = JSON.parse(l); } catch(e){}
     }
     applyParsed(parsed || {});
+    if(!(groupsData.length || childrenData.length || calendarsData.length) && sb && currentUser.id!=='local'){
+      try { const { data: vs } = await sb.rpc('my_child_views'); if(vs && vs.length){ enterViewer(vs[0]); return; } } catch(e){ console.warn(e); }
+    }
+    if(sb && currentUser.id!=='local' && !currentUser.is_anonymous){
+      try { const { data: sh } = await sb.from('child_access').select('id,child_id,email'); sharesData = sh || []; } catch(e){}
+    }
     rebuildKids();
     wizStep = groupsData.length ? 0 : 1; state.tab = 'schedule';
     storageReady = true;
     render();
+    syncShares();
     if(parsed && !fromCloud){ await persistAll(); try{ localStorage.removeItem('diary:diary-data'); }catch(e){} }
   }
   async function loadStorage(){
@@ -970,7 +1036,7 @@
       else {
         sb.auth.onAuthStateChange(ev=>{
           if(ev==='PASSWORD_RECOVERY'){ authMode='recovery'; storageReady=true; render(); }
-          if(ev==='SIGNED_OUT'){ currentUser=null; wizStep=0; applyParsed({}); rebuildKids(); render(); }
+          if(ev==='SIGNED_OUT'){ currentUser=null; wizStep=0; viewerMode=false; applyParsed({}); rebuildKids(); render(); }
         });
         const { data } = await sb.auth.getSession();
         currentUser = data.session ? data.session.user : null;
@@ -983,7 +1049,7 @@
   let saveFailed = false;
 
   async function persistAll(){
-    if(!currentUser) return;
+    if(!currentUser || viewerMode) return;
     const payload = {
       homework: homeworkData,
       overrides: overridesData,
@@ -1032,6 +1098,7 @@
     })();
     await saveInFlight;
     saveInFlight = null;
+    syncShares();
   }
 
 
@@ -1089,6 +1156,45 @@
       }
     };
   }
+
+
+  // ---------- sharing a child's calendars by e-mail ----------
+  function buildChildSnapshot(id){
+    const c = childrenData.find(x=>x.id===id && !x.archive); if(!c) return null;
+    const cals = calendarsData.filter(x=>x.kid===id || x.kid==='both'), ids = cals.map(x=>x.id), mine = k=>k===id || k==='both';
+    const only = (o,pred)=>Object.fromEntries(Object.entries(o).filter(([k])=>pred(k)));
+    return {
+      child:{id:c.id,name:c.name,hex:c.hex}, calendars:cals, calRules:calRulesData.filter(r=>ids.includes(r.calendarId)),
+      reminders:remindersData.filter(r=>mine(r.kid)), vacations:vacationsData.filter(v=>mine(v.kid)),
+      customLessons:customLessonsData.filter(x=>x.kid===id), recurringOverrides:recurringOverridesData.filter(x=>x.kid===id),
+      overrides:only(overridesData,k=>k.startsWith(id+'|')),
+      homework:only(homeworkData,k=>k.startsWith(id+'|') || ids.some(i=>k.startsWith('cal|'+i+'|'))),
+      grades:{[id]:gradesData[id]||{}}, excludedSubjects:{[id]:excludedSubjectsData[id]||[]}
+    };
+  }
+  async function syncShares(){
+    if(viewerMode || !sb || !sharesData.length) return;
+    if(syncing){ syncAgain = true; return; }
+    syncing = true;
+    try {
+      do {
+        syncAgain = false;
+        for(const r of sharesData){
+          const snap = buildChildSnapshot(r.child_id), c = childrenData.find(x=>x.id===r.child_id), str = JSON.stringify(snap);
+          if(sharePushed[r.id]===str) continue;
+          const { error } = await sb.from('child_access').update({snapshot:snap, child_name:c?c.name:r.child_name, updated_at:new Date().toISOString()}).eq('id',r.id);
+          if(error) console.warn('child_access:', error.message); else sharePushed[r.id] = str;
+        }
+      } while(syncAgain);
+    } finally { syncing = false; }
+  }
+  function enterViewer(row){
+    const sn = row.snapshot || {}, ch = sn.child || {id:row.child_id, name:row.child_name||'Ученик', hex:'#5b6fc7'};
+    viewerMode = true;
+    applyParsed({...sn, children:[ch], groups:[{id:'g-kids',kind:'kids',name:'Учебный (дети)'}]});
+    rebuildKids(); wizStep = 0; state.tab = 'schedule'; storageReady = true; render();
+  }
+  const mailHref = (email,name)=>'mailto:'+email+'?subject='+encodeURIComponent('Доступ к дневнику')+'&body='+encodeURIComponent('Привет, '+name+'! Откройте дневник: '+location.href.split('#')[0]+' — создайте аккаунт или войдите под этой почтой ('+email+'), и вы увидите своё расписание, оценки и олимпиады.');
 
   // ---------- groups (calendar categories) and children ----------
   function createKidCalendars(c){
@@ -1153,6 +1259,9 @@
       o += active.length ? `<div class="cal-list">${active.map(c=>`<div class="cal-row"><input type="color" data-kidcolor="${c.id}" value="${c.hex}" style="width:34px;height:28px;padding:1px;"><input type="text" data-kidname="${c.id}" value="${escAttr(c.name)}" style="flex:1;font-weight:700;${inp}"><button class="btn secondary" data-kidarch="${c.id}">${c.id.length>0?'В архив':''}</button></div>`).join('')}</div>` : `<div class="empty-state">Детей пока нет.</div>`;
       if(archived.length) o += `<div class="section-title">Архив</div>
         <div class="cal-list">${archived.map(c=>`<div class="cal-row"><b style="flex:1;color:var(--ink-soft);">${escapeHtml(c.name)}</b><span style="font-size:12px;color:var(--ink-soft);">в архиве с ${c.archive.at.slice(0,10)}</span><button class="btn secondary" data-kidrestore="${c.id}">Восстановить</button><button class="btn danger" data-kiddel="${c.id}">Удалить навсегда</button></div>`).join('')}</div>`;
+      if(sb && currentUser.id!=='local' && !currentUser.is_anonymous && active.length) o += `<div class="section-title">Доступ детей</div><div class="cal-list">${active.map(c=>{
+        const rows = sharesData.filter(r=>r.child_id===c.id);
+        return `<div class="cal-row" style="flex-wrap:wrap;"><b style="flex:1 1 100%;">${escapeHtml(c.name)}</b>${rows.map(r=>`<span style="background:#ecebe6;border-radius:999px;padding:4px 12px;display:inline-flex;gap:10px;align-items:center;">${escapeHtml(r.email)} <a href="${mailHref(r.email,c.name)}" title="Отправить приглашение">✉</a> <a href="#" data-sharedel="${r.id}" title="Закрыть доступ">✕</a></span>`).join('')}<input type="email" id="sh-${c.id}" placeholder="Email ребёнка" style="${inp}flex:1;min-width:180px;"><button class="btn" data-shareadd="${c.id}">Дать доступ</button></div>`; }).join('')}</div>`;
       o += `<div style="display:flex;gap:8px;margin-top:16px;"><button class="btn secondary" id="wiz-back">Назад</button><div class="spacer"></div><button class="btn" id="wiz-done">Готово</button></div>`;
     }
     return o + `</div></div>`;
@@ -1173,6 +1282,22 @@
       if(currentUser.is_anonymous && !confirm('Вы гость: после выхода данные будут потеряны. Выйти?')) return;
       await sb.auth.signOut();
     };
+    $('[data-shareadd]').forEach(el=>el.onclick=async ()=>{
+      const id = el.dataset.shareadd, c = childrenData.find(x=>x.id===id), email = (document.getElementById('sh-'+id).value||'').trim().toLowerCase();
+      if(!c || !/^\S+@\S+\.\S+$/.test(email)) return alert('Введите корректный email.');
+      if(sharesData.some(r=>r.child_id===id && r.email===email)) return;
+      const snap = buildChildSnapshot(id);
+      const { data, error } = await sb.from('child_access').insert({owner_id:currentUser.id, child_id:id, child_name:c.name, email, snapshot:snap}).select('id,child_id,email').single();
+      if(error) return alert('Не удалось дать доступ: '+error.message);
+      sharesData.push(data); sharePushed[data.id] = JSON.stringify(snap); render();
+    });
+    $('[data-sharedel]').forEach(el=>el.onclick=async e=>{
+      e.preventDefault();
+      if(!confirm('Закрыть доступ для '+(sharesData.find(r=>r.id===el.dataset.sharedel)||{}).email+'?')) return;
+      const { error } = await sb.from('child_access').delete().eq('id',el.dataset.sharedel);
+      if(error) return alert('Не удалось: '+error.message);
+      sharesData = sharesData.filter(r=>r.id!==el.dataset.sharedel); render();
+    });
     const hs = document.getElementById('hdr-settings'); if(hs) hs.onclick = ()=>{ wizStep = 1; render(); };
     const gu = document.getElementById('gu-up'); if(gu) gu.onclick = async ()=>{
       const email = document.getElementById('gu-email').value.trim(), password = document.getElementById('gu-pass').value;
@@ -1219,7 +1344,7 @@
     $('[data-kidrestore]').forEach(el=>el.onclick=async ()=>{ restoreChild(el.dataset.kidrestore); await commitProfile(); });
     $('[data-kiddel]').forEach(el=>el.onclick=async ()=>{
       const c = by(el.dataset.kiddel,childrenData);
-      if(c && confirm('Удалить «'+c.name+'» и все его данные навсегда? Восстановить будет нельзя.')){ childrenData = childrenData.filter(x=>x.id!==c.id); await commitProfile(); }
+      if(c && confirm('Удалить «'+c.name+'» и все его данные навсегда? Восстановить будет нельзя.')){ childrenData = childrenData.filter(x=>x.id!==c.id); if(sb) await sb.from('child_access').delete().eq('child_id',c.id); sharesData = sharesData.filter(r=>r.child_id!==c.id); await commitProfile(); }
     });
     $('[data-calname]').forEach(el=>el.onchange=async ()=>{ const c=by(el.dataset.calname,calendarsData), v=el.value.trim(); if(c&&v){ c.name=v; await persistAll(); render(); } });
   }
@@ -1231,7 +1356,8 @@
     if(!storageReady){ app.innerHTML = '<div class="loading">Загрузка дневника…</div>'; return; }
     if(!currentUser || authMode==='recovery'){ app.innerHTML = authHtml(); bindAuth(); return; }
     if(wizStep){ app.innerHTML = renderWizard(); bindProfile(); bindWiz(); return; }
-    let html = renderHeader() + renderTabs();
+    if(viewerMode) modalState = null;
+    let html = '';
     if(state.tab==='schedule') html += renderScheduleTab();
     else if(state.tab==='calsettings') html += renderCalSettingsTab();
     else if(state.tab==='homework') html += renderHomeworkTab();
@@ -1240,26 +1366,32 @@
     else if(state.tab==='documents') html += renderDocumentsTab();
     else if(state.tab==='olympiads') html += renderOlympiadsTab();
     else html += renderRemindersTab();
+    html = renderShell(html);
     app.innerHTML = html;
     attachHandlers();
     if(state.tab==='schedule') fitTimeScale();
     if(modalState) renderModal();
   }
 
-  function renderHeader(){
-    const note = storageBackend === 'supabase'
-      ? ' · синхронизация с Supabase активна'
-      : ' · сохраняется только в этом браузере';
-    return `<header class="top">
-      <div><h1>Дневник</h1></div>
-      <div style="display:flex;gap:8px;"><button class="btn secondary" id="hdr-settings">⚙ Календари и дети</button>${currentUser&&currentUser.id!=='local'?'<button class="btn secondary" id="au-logout">Выйти</button>':''}</div>
-    </header>`;
-  }
-
-  function renderTabs(){
-    const tabs = [['schedule','Расписание'],['calsettings','Настройка расписания'],['homework','Домашние задания'],['grades','Оценки'],['library','Библиотека'],['documents','Шаблоны и справки'],['reminders','Напоминания и олимпиады'],['olympiads','Олимпиады']];
-    return `<nav class="tabs">${tabs.map(([id,label])=>
-      `<button data-tab="${id}" class="${state.tab===id?'active':''}">${label}</button>`).join('')}</nav>`;
+  const TABS = [['schedule','Расписание','<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M3 9h18M8 2v4M16 2v4"/>'],
+    ['calsettings','Настройка расписания','<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'],
+    ['homework','Домашние задания','<path d="M5 3h11l3 3v15H5z"/><path d="M9 11h6M9 15h6"/>'],
+    ['grades','Оценки','<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>'],
+    ['library','Библиотека','<path d="M4 5a2 2 0 012-2h12v16H6a2 2 0 00-2 2zM4 19V5"/>'],
+    ['documents','Шаблоны и справки','<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h4M6 16c.5-1.5 5.5-1.5 6 0"/>'],
+    ['reminders','Напоминания и олимпиады','<path d="M6 9a6 6 0 0112 0c0 6 2 7 2 7H4s2-1 2-7zM10 20a2 2 0 004 0"/>'],
+    ['olympiads','Олимпиады','<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H4v1a4 4 0 004 4M16 6h4v1a4 4 0 01-4 4M12 13v4M8 21h8M10 17h4"/>']];
+  function renderShell(content){
+    const tabs = viewerMode ? TABS.filter(t=>['schedule','grades','olympiads'].includes(t[0])) : TABS;
+    const cur = tabs.find(t=>t[0]===state.tab) || tabs[0];
+    const em = (currentUser && currentUser.email) || '';
+    const ini = currentUser && currentUser.is_anonymous ? 'Г' : (em ? em.slice(0,2).toUpperCase() : 'ДН');
+    const ico = d=>`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+    const out = currentUser && currentUser.id!=='local';
+    return `<div class="shell${viewerMode?' ro':''}"><aside class="side"><div class="brand"><span class="logo">${ico('<circle cx="12" cy="12" r="8"/><path d="M8.5 12.3l2.5 2.5 4.5-5"/>')}</span>Дневник</div>
+      <nav class="sidenav">${tabs.map(([id,label,d])=>`<button data-tab="${id}" class="${state.tab===id?'active':''}">${ico(d)}<span>${label}</span></button>`).join('')}</nav>
+      <div class="side-foot">${viewerMode?'':`<button id="hdr-settings">${ico('<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.5 3-5.5 6-5.5s6 2 6 5.5M17 6v6M14 9h6"/>')}<span>Календари и дети</span></button>`}${out?`<button id="au-logout">${ico('<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>')}<span>Выйти</span></button>`:''}</div></aside>
+      <main class="main"><div class="topbar"><div><div class="eyebrow">${viewerMode?'Кабинет ученика':'Личный кабинет'}</div><h1>${cur[1]}</h1></div><div class="avatar" title="${escAttr(em||'Гость')}">${escapeHtml(ini)}</div></div>${content}</main></div>`;
   }
 
   function legendHtml(){ return '';
@@ -1548,8 +1680,7 @@
   // so hiding a calendar (or having no lessons) lets the remaining columns take the freed width
   let shownKids = [];
   function pickShownKids(evList){
-    const f = KIDS.filter(k=>evList.some(ev=>(ev[k.id]||[]).length));
-    shownKids = f.length ? f : KIDS.slice();
+    shownKids = KIDS.filter(k=>k.id!=='me' && evList.some(ev=>(ev[k.id]||[]).length)); // «Я» is drawn as a background layer, not a column
   }
   function tsEventsFor(dateStr){
     const ev = {};
@@ -1576,7 +1707,7 @@
     const gradesEl = badges ? `<span class="ts-grades">${badges}</span>` : '';
     const hwEl = flag ? `<span class="ts-hw" title="${flag==='✅'?'Домашнее задание выполнено':'Есть домашнее задание'}">${flag}</span>` : '';
     // opaque base under the tint, so the hour lines never show through a lesson block
-    const tint = ev.color ? `background:color-mix(in srgb, ${ev.color} 30%, #fbf8ee);` : '';
+    const tint = ev.color ? `background:color-mix(in srgb, ${ev.color} ${ev.kid==='me'?62:30}%, #fbf8ee);` : '';
     if(mode==='day'){
       const colorStyle = ev.color ? `${tint}border-left-color:${ev.color};` : `background:var(--${ev.kid}-soft);`;
       return `<div class="cell-lesson ts-ev ${ev.color?'':ev.kid}" ${ev.attr} data-dur="${dur}" title="${escAttr(title)}" style="${pos}${colorStyle}">
@@ -1602,7 +1733,7 @@
     }
     return `<div class="ts-body ${mode}" data-basepph="${pph}" style="--pph:${pph}px;height:calc(var(--pph) * ${hours});">
       <div class="ts-gutter">${labels}</div>
-      <div class="ts-lanes">${shownKids.map(k=>`<div class="ts-lane">${(ev[k.id]||[]).map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>`).join('')}</div>
+      <div class="ts-lanes"><div class="ts-bgl">${(ev.me||[]).map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>${shownKids.map(k=>`<div class="ts-lane">${(ev[k.id]||[]).map(e=>tsBlockHtml(e,dateStr,startH,pph,mode)).join('')}</div>`).join('')}</div>
       ${now}
     </div>`;
   }

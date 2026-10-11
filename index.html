@@ -1987,7 +1987,7 @@
     const excluded = excludedSubjectsData[gradesKid] || [];
     const subjects = allSubjects.filter(s=>!excluded.includes(s));
     let out = `<div class="grades-toolbar">
-      <div class="seg">${KIDS.map(k=>`<button data-gradekid="${k.id}" class="${gradesKid===k.id?'active':''}">${k.name}</button>`).join('')}</div>
+      <div class="seg">${KIDS.filter(k=>k.id!=='me').map(k=>`<button data-gradekid="${k.id}" class="${gradesKid===k.id?'active':''}">${k.name}</button>`).join('')}</div>
       <div class="seg">${[1,2,3].map(t=>`<button data-gradetri="${t}" class="${gradesTri===t?'active':''}">${t}-й триместр</button>`).join('')}</div>
       <span class="spacer"></span>
       ${(()=>{ let n=0; subjects.forEach(sj=>{ n += gradesFor(gradesKid, sj, gradesTri).length; }); return n>0 ? `<button class="btn secondary" id="grades-clear" style="color:var(--warn);border-color:var(--warn);">Удалить все оценки (${n})</button>` : ''; })()}
@@ -2091,7 +2091,7 @@
     const todayStr = iso(startOfDay(new Date()));
     let entries = collectHomework().filter(e=>!e.orphaned);
     entries.sort((a,b)=> (a.date+a.start).localeCompare(b.date+b.start));
-    let filtered = entries;
+    let filtered = entries.filter(e=>e.kid!=='me');
     if(hwFilterSource!=='all'){
       filtered = filtered.filter(e=> e.kid===hwFilterSource || e.kid==='both');
     }
@@ -2103,7 +2103,7 @@
     out += `<div class="filters">
       <div class="seg">
         <button data-hwsrc="all" class="${hwFilterSource==='all'?'active':''}">Все</button>
-        ${KIDS.map(k=>`<button data-hwsrc="${k.id}" class="${hwFilterSource===k.id?'active':''}">${k.name}</button>`).join('')}
+        ${KIDS.filter(k=>k.id!=='me').map(k=>`<button data-hwsrc="${k.id}" class="${hwFilterSource===k.id?'active':''}">${k.name}</button>`).join('')}
       </div>
       <div class="seg">
         <button data-hwstatus="all" class="${hwFilterStatus==='all'?'active':''}">Все</button>
@@ -2111,7 +2111,7 @@
         <button data-hwstatus="done" class="${hwFilterStatus==='done'?'active':''}">Сделано</button>
       </div>
       <div class="spacer"></div>
-      ${KIDS.map(k=>`<button class="btn secondary" data-printhw="${k.id}">🖨 Печать — ${escapeHtml(k.name)}</button>`).join('')}
+      ${KIDS.filter(k=>k.id!=='me').map(k=>`<button class="btn secondary" data-printhw="${k.id}">🖨 Печать — ${escapeHtml(k.name)}</button>`).join('')}
     </div>`;
 
     if(filtered.length===0){
@@ -2293,7 +2293,7 @@
       <div class="field"><label><input type="checkbox" id="olt-period"> Период</label></div>
       <div class="field" id="olt-end-field" style="display:none;"><label>По</label><input type="date" id="olt-end" value="${todayStr}"></div>
       <div class="field"><label>Кто участвует</label><select id="olt-kid">
-        ${KIDS.map(k=>`<option value="${k.id}">${k.name}</option>`).join('')}
+        ${KIDS.filter(k=>k.id!=='me').map(k=>`<option value="${k.id}">${k.name}</option>`).join('')}
       </select></div>
       <div class="field" style="flex:1 1 220px;"><label>Название олимпиады</label><input type="text" id="olt-text" placeholder="Например: Олимпиада по математике"></div>
       <div class="field"><label>Баллы (необязательно)</label><input type="text" id="olt-score" style="min-width:0;width:130px;"></div>
@@ -2302,7 +2302,7 @@
     </div>
     <div class="filters"><div class="seg">
       <button data-olkid="all" class="${olKidFilter==='all'?'active':''}">Все</button>
-      ${KIDS.map(k=>`<button data-olkid="${k.id}" class="${olKidFilter===k.id?'active':''}">${k.name}</button>`).join('')}
+      ${KIDS.filter(k=>k.id!=='me').map(k=>`<button data-olkid="${k.id}" class="${olKidFilter===k.id?'active':''}">${k.name}</button>`).join('')}
     </div></div>
     <div class="ol-summary">Олимпиад: ${list.length} · с дипломом: ${withDiploma}</div>`;
 

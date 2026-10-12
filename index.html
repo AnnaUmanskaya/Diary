@@ -576,14 +576,20 @@
   .side{width:244px;flex-basis:244px;} .main{padding:30px 28px 60px;}
   .ro [data-addlesson],.ro [data-gradeadd],.ro [data-gradedel],.ro [data-subjdel],.ro [data-subjrestore],.ro #grades-clear,.ro .reminder-form,.ro .rdel{display:none !important;}
   .ro [data-hworphandel]{display:none !important;}
-  .ro [data-hwedit],.ro [data-hwedit-cal],.ro:not(.canmark) [data-hwtoggle],.ro:not(.canmark) [data-hwtoggle-cal]{pointer-events:none;}
+  .ro:not(.canmark) [data-hwtoggle],.ro:not(.canmark) [data-hwtoggle-cal]{pointer-events:none;}
   .ro .warn-banner{display:none;}
   .cal-row a{color:var(--navy);text-decoration:none;}
+  /* меню всегда на виду: фиксируем (sticky ломается из-за overflow-x:hidden у html/body) */
+  .side{position:fixed;left:0;top:0;bottom:0;height:auto;z-index:50;}
+  .main{margin-left:244px;}
   @media (max-width:860px){
-    .shell{flex-direction:column;} .side{width:auto;flex:none;height:auto;position:static;}
-    .brand{padding:12px 16px;font-size:18px;} .sidenav{flex-direction:row;overflow-x:auto;padding:8px;}
-    .sidenav button{white-space:nowrap;width:auto;padding:9px 12px;font-size:14px;} .side-foot{flex-direction:row;padding:6px 8px;}
-    .side-foot button{width:auto;padding:8px 10px;font-size:13px;} .main{padding:18px 12px 40px;} .topbar h1{font-size:26px;}
+    .shell{display:block;}
+    .side{position:fixed;top:0;left:0;right:0;bottom:auto;width:auto;height:58px;flex-direction:row;align-items:center;}
+    .brand{display:none;} .sidenav{flex-direction:row;flex:1;min-width:0;overflow-x:auto;overflow-y:hidden;padding:7px 6px;gap:2px;}
+    .sidenav button{white-space:nowrap;width:auto;padding:9px 12px;font-size:14px;gap:8px;}
+    .side-foot{flex-direction:row;padding:7px 6px;border-top:none;border-left:1px solid #222d45;}
+    .side-foot button{width:auto;padding:9px 10px;} .side-foot button span{display:none;}
+    .main{margin-left:0;padding:74px 12px 40px;} .topbar h1{font-size:26px;}
   }
   @media print{.side,.topbar{display:none !important;} .main{padding:0;}}
 </style>
@@ -1383,7 +1389,7 @@
     if(!storageReady){ app.innerHTML = '<div class="loading">Загрузка дневника…</div>'; return; }
     if(!currentUser || authMode==='recovery'){ app.innerHTML = authHtml(); bindAuth(); return; }
     if(wizStep){ app.innerHTML = renderWizard(); bindProfile(); bindWiz(); return; }
-    if(viewerMode) modalState = null;
+    if(viewerMode && modalState && modalState.isNew) modalState = null;
     let html = '';
     if(state.tab==='schedule') html += renderScheduleTab();
     else if(state.tab==='calsettings') html += renderCalSettingsTab();
@@ -3019,7 +3025,39 @@
   // ---- modal (edit subject + homework) ----
   let modalState = null; // {kid,date,start,end,isNew}
 
+  // карточка урока для ребёнка: смотреть задание/файлы и (если разрешено) отмечать «Выполнено»
+  function renderViewerLessonModal(){
+    const old = document.getElementById('modal-backdrop'); if(old) old.remove();
+    const m = modalState; let title, sub, key;
+    if(m.calType==='cal'){
+      const cal = calendarsData.find(c=>c.id===m.calendarId) || {name:'Календарь'};
+      const rule = calRulesData.find(r=>r.calendarId===m.calendarId && r.start===m.start && calRuleMatchesDate(r,m.date));
+      key = resolveHwKey(m.calendarId, rule?rule.id:null, m.date, m.start);
+      title = cal.name; sub = (rule?rule.subject:'');
+    } else {
+      key = keyOf(m.kid, m.date, m.start);
+      title = (KIDS.find(k=>k.id===m.kid)||{}).name || ''; sub = resolvedSubject(m.kid, m.date, m.start) || '';
+    }
+    const hw = homeworkData[key];
+    const files = (hw && hw.files) || [];
+    const div = document.createElement('div'); div.className = 'modal-backdrop'; div.id = 'modal-backdrop';
+    div.innerHTML = `<div class="modal"><h3>${escapeHtml(title)}</h3>
+      <div class="m-sub">${escapeHtml(sub)} · ${fmtDate(m.date)} · ${m.start}${m.end?'–'+m.end:''}</div>
+      <label class="m-label">Домашнее задание</label>
+      <div style="white-space:pre-wrap;padding:6px 0 10px;">${hw && hw.text ? escapeHtml(hw.text) : '<span style="color:var(--ink-soft)">Не задано</span>'}</div>
+      ${files.length ? `<div style="margin-bottom:10px;">${files.map(f=>`<div><a href="${fileUrl(f)}" target="_blank" rel="noopener">📎 ${escapeHtml(f.name)}</a></div>`).join('')}</div>` : ''}
+      ${hw ? `<label class="m-check"><input type="checkbox" id="m-done" ${hw.done?'checked':''} ${viewerCanMark?'':'disabled'}> Выполнено</label>` : ''}
+      <div class="m-actions"><button class="btn secondary" id="m-close">Закрыть</button></div></div>`;
+    document.body.appendChild(div);
+    const close = ()=>{ div.remove(); modalState = null; };
+    document.getElementById('m-close').onclick = close;
+    div.onclick = e=>{ if(e.target===div) close(); };
+    const cb = document.getElementById('m-done');
+    if(cb && viewerCanMark) cb.onchange = async ()=>{ hw.done = cb.checked; await commitDone(key); if(hw.done!==cb.checked) cb.checked = hw.done; render(); };
+  }
+
   function renderModal(){
+    if(viewerMode) return renderViewerLessonModal();
     if(modalState.calType==='cal') return renderCalLessonModal();
     const {isNew} = modalState;
     if(isNew) return renderNewLessonModal();

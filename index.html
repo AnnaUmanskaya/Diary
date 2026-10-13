@@ -3307,175 +3307,66 @@
   }
 
   // ============================================================
-  // Excel export of the weekly schedule template — three sheets:
-  // "Расписание" (combined, colour-coded per kid), "Петя", "Федя".
-  // Only PERIODIC (recurring) lessons/activities are shown — no
-  // dates, no reminders/olympiads, no homework marks, no one-off
-  // entries (custom one-off lessons or rules with repeat:'none').
+  // Excel export of the CURRENT week's schedule — one sheet per view:
+  // «Общее расписание» (все дети рядом), затем по листу на каждого ребёнка.
+  // Уроки лицея и доп.занятия стоят в ОДНОЙ общей сетке: строки — номера уроков
+  // (без перемен), доп.занятие занимает строки уроков, которые оно перекрывает по времени.
   // ============================================================
-  const EXTRA_BLOCKS = [
-    {start:'16:00', end:'17:00'},
-    {start:'17:00', end:'18:00'},
-    {start:'18:00', end:'19:00'},
-    {start:'19:00', end:'20:00'},
-    {start:'20:00', end:'21:00'}
-  ];
   function toMin(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+  function fmtMin(m){ return pad2(Math.floor(m/60))+':'+pad2(m%60); }
   function hexToARGB(hex){ return 'FF'+hex.replace('#','').toUpperCase(); }
 
-  // 8-slot array (one per lyceum period) for a kid on a given date, keeping only
-  // periodic sources: the standing ICS lyceum timetable, and lyceum-calendar rules
-  // whose repeat is NOT 'none'. One-off custom lessons / one-off rule overrides are
-  // intentionally skipped — they are not part of the recurring weekly template.
-  function lyceumPeriodsForWeekdayFiltered(kid, dateStr){
-    const arr = new Array(LESSON_TIMES.length).fill(null);
-    (lessonsByKidDate[kid][dateStr]||[]).forEach(l=>{
-      const idx = LESSON_TIMES.findIndex(p=>p.start===l.start);
-      if(idx>=0) arr[idx] = {subject: resolvedSubject(kid,dateStr,l.start)};
-    });
+  function lessonSlotIndex(start, timeMode, lessonNumber){
+    if(timeMode==='lesson' && lessonNumber){ const i = LESSON_TIMES.findIndex(p=>p.n===lessonNumber); if(i>=0) return i; }
+    return LESSON_TIMES.findIndex(p=>p.start===start);
+  }
+  function isExtraCalendarForKid(cal, kid){
+    if(!cal || !cal.name) return false;
+    if(isLyceumCalendarForKid(cal,kid)) return false;
+    const n = normCalName(cal.name);
+    const ko = KIDS.find(k=>k.id===kid);
+    const mine = cal.kid===kid || (!!ko && n.includes(normCalName(ko.name)));
+    return mine && (cal.auto==='extra' || n.includes('доп'));
+  }
+
+  // все занятия ребёнка на дату (уроки лицея + доп.занятия) как {s,e,start,end,subject,lesson}
+  // в минутах от полуночи; одноразовые и повторяющиеся — всё, что реально выпадает на эту дату
+  function scheduleEventsForDay(kid, dateStr){
+    const map = new Map();
+    const mk = (s,e,subject,lesson)=>{ if(!(e>s)) e = s+60; return {s,e,start:fmtMin(s),end:fmtMin(e),subject,lesson}; };
+    const addLesson = (start,end,timeMode,lessonNumber,subject)=>{
+      const idx = lessonSlotIndex(start,timeMode,lessonNumber);
+      if(idx>=0){ const p = LESSON_TIMES[idx]; map.set('L'+idx, mk(toMin(p.start),toMin(p.end),subject,true)); }
+      else map.set('T'+start, mk(toMin(start), end?toMin(end):toMin(start)+60, subject, true));
+    };
+    (lessonsByKidDate[kid][dateStr]||[]).forEach(l=> addLesson(l.start,l.end,null,null,resolvedSubject(kid,dateStr,l.start)));
+    customLessonsFor(kid,dateStr).forEach(l=> addLesson(l.start,l.end,null,null,l.subject));
     calOccurrencesForDate(dateStr).forEach(o=>{
-      if(!(o.kid===kid || o.kid==='both')) return;
       const cal = calendarsData.find(c=>c.id===o.calendarId);
-      if(!isLyceumCalendarForKid(cal,kid)) return;
-      const rule = calRulesData.find(r=>r.id===o.ruleId);
-      if(rule && rule.repeat==='none') return;
-      const idx = LESSON_TIMES.findIndex(p=>p.start===o.start);
-      if(idx>=0) arr[idx] = {subject: o.subject};
+      if(isLyceumCalendarForKid(cal,kid)) addLesson(o.start,o.end,o.timeMode,o.lessonNumber,o.subject);
+      else if(isExtraCalendarForKid(cal,kid)) map.set('X'+o.ruleId+'|'+o.start, mk(toMin(o.start), o.end?toMin(o.end):toMin(o.start)+60, o.subject, false));
     });
-    return arr;
+    return Array.from(map.values()).sort((a,b)=>a.s-b.s||a.e-b.e);
   }
 
-  // extra ("доп.") activities for a kid on a given date, periodic sources only,
-  // overlapping the 16:00–21:00 window
-  function extraActivitiesForWeekdayFiltered(kid, dateStr){
-    const list = [];
-    calOccurrencesForDate(dateStr).forEach(o=>{
-      if(!(o.kid===kid || o.kid==='both')) return;
-      const cal = calendarsData.find(c=>c.id===o.calendarId);
-      if(isLyceumCalendarForKid(cal,kid)) return;
-      const rule = calRulesData.find(r=>r.id===o.ruleId);
-      if(rule && rule.repeat==='none') return;
-      list.push({start:o.start, end:o.end||o.start, subject:o.subject});
+  // занятия, пересекающиеся во времени в одной колонке, сливаются в одну ячейку
+  function clusterEvents(evs){
+    const out = []; let cur = null;
+    evs.forEach(ev=>{
+      if(cur && ev.s<cur.e){ cur.items.push(ev); cur.e = Math.max(cur.e,ev.e); }
+      else { cur = {s:ev.s, e:ev.e, items:[ev]}; out.push(cur); }
     });
-    return list
-      .filter(a=> a.start < '21:00' && (a.end||a.start) > '16:00')
-      .sort((a,b)=> a.start.localeCompare(b.start));
+    out.forEach(c=>{ c.text = clusterText(c.items); });
+    return out;
+  }
+  function clusterText(items){
+    return items.length===1
+      ? (items[0].lesson ? items[0].subject : items[0].subject+'\n'+items[0].start+' - '+items[0].end)
+      : items.map(i=>i.subject+' ('+i.start+'–'+i.end+')').join('\n');
   }
 
-  // Computes the shared 16:00–21:00 row grid for the whole extra-activities section
-  // of a sheet at once (across every day column and every kid column together),
-  // since they all live in the same physical Excel rows. A row is only split where
-  // some column's activity genuinely starts/ends off an hour boundary; an activity
-  // cell then spans (merges) down through any further whole-hour rows it covers.
-  function computeExtraSectionGrid(days, kidsToShow){
-    const rangeStart = toMin('16:00'), rangeEnd = toMin('21:00');
-    const actsByCol = {};
-    days.forEach((d,dayIdx)=>{
-      actsByCol[dayIdx] = {};
-      kidsToShow.forEach(k=>{ actsByCol[dayIdx][k] = extraActivitiesForWeekdayFiltered(k, d.date); });
-    });
-    const bpSet = new Set([16,17,18,19,20,21].map(h=>h*60));
-    days.forEach((d,dayIdx)=>{
-      kidsToShow.forEach(k=>{
-        actsByCol[dayIdx][k].forEach(a=>{
-          const s = Math.max(rangeStart, toMin(a.start));
-          const e = Math.min(rangeEnd, toMin(a.end||a.start));
-          if(s>rangeStart && s<rangeEnd) bpSet.add(s);
-          if(e>rangeStart && e<rangeEnd) bpSet.add(e);
-        });
-      });
-    });
-    const bps = Array.from(bpSet).sort((a,b)=>a-b);
-    const segments = [];
-    for(let i=0;i<bps.length-1;i++) segments.push({start:bps[i], end:bps[i+1], hour: Math.floor((bps[i]-rangeStart)/60)});
-    const hourGroupSize = [0,0,0,0,0];
-    segments.forEach(s=> hourGroupSize[s.hour]++);
-
-    function activityForSegment(dayIdx,kid,seg){
-      return actsByCol[dayIdx][kid].find(a=>{
-        const s = Math.max(rangeStart, toMin(a.start)), e = Math.min(rangeEnd, toMin(a.end||a.start));
-        return s<=seg.start && e>=seg.end;
-      }) || null;
-    }
-
-    const colSeg = {}, colRowspan = {};
-    days.forEach((d,dayIdx)=>{
-      colSeg[dayIdx]={}; colRowspan[dayIdx]={};
-      kidsToShow.forEach(k=>{
-        const segArr = segments.map(seg=>activityForSegment(dayIdx,k,seg));
-        colSeg[dayIdx][k] = segArr;
-        const rs = new Array(segments.length).fill(1);
-        let i=0;
-        while(i<segments.length){
-          const cur = segArr[i];
-          let j=i+1;
-          while(j<segments.length){
-            const nxt = segArr[j];
-            // same activity object merges across hour boundaries; two "empty" segments
-            // only merge if they belong to the same hour block, so the 5 named
-            // hour-rows stay visually distinct wherever nothing needs splitting
-            const same = cur ? (nxt===cur) : (nxt===null && segments[j].hour===segments[i].hour);
-            if(!same) break;
-            j++;
-          }
-          rs[i]=j-i;
-          for(let x=i+1;x<j;x++) rs[x]=0;
-          i=j;
-        }
-        colRowspan[dayIdx][k]=rs;
-      });
-    });
-    return {hourGroupSize, colSeg, colRowspan};
-  }
-
-  function writePeriodRows(ws, startRow, days, kidsToShow, colsPerDay){
-    const cache = {};
-    days.forEach((d,dayIdx)=>{ cache[dayIdx]={}; kidsToShow.forEach(k=> cache[dayIdx][k]=lyceumPeriodsForWeekdayFiltered(k,d.date)); });
-    LESSON_TIMES.forEach((p,idx)=>{
-      const r = startRow+idx;
-      ws.getCell(r,1).value = p.n+' урок\n'+p.start+' - '+p.end;
-      days.forEach((d,dayIdx)=>{
-        kidsToShow.forEach((k,kIdx)=>{
-          const col = 2+dayIdx*colsPerDay+kIdx;
-          const cell = cache[dayIdx][k][idx];
-          if(cell && cell.subject) ws.getCell(r,col).value = cell.subject;
-        });
-      });
-    });
-    return startRow+LESSON_TIMES.length;
-  }
-
-  function writeExtraSection(ws, startRow, days, kidsToShow, colsPerDay){
-    const {hourGroupSize, colSeg, colRowspan} = computeExtraSectionGrid(days, kidsToShow);
-    let rowNum = startRow, segIdx = 0;
-    for(let h=0; h<5; h++){
-      const size = hourGroupSize[h] || 0;
-      for(let s=0; s<size; s++){
-        const excelRow = rowNum;
-        if(s===0){
-          ws.getCell(excelRow,1).value = EXTRA_BLOCKS[h].start+' - '+EXTRA_BLOCKS[h].end;
-          if(size>1) ws.mergeCells(excelRow,1,excelRow+size-1,1);
-        }
-        days.forEach((d,dayIdx)=>{
-          kidsToShow.forEach((k,kIdx)=>{
-            const col = 2+dayIdx*colsPerDay+kIdx;
-            const rs = colRowspan[dayIdx][k][segIdx];
-            if(rs>0){
-              const act = colSeg[dayIdx][k][segIdx];
-              if(act) ws.getCell(excelRow,col).value = act.subject+'\n'+act.start+' - '+act.end;
-              if(rs>1) ws.mergeCells(excelRow,col,excelRow+rs-1,col);
-            }
-          });
-        });
-        segIdx++; rowNum++;
-      }
-    }
-    return rowNum;
-  }
-
-  // builds one worksheet: fixed 1–8 lyceum-period rows + blank spacer + fixed
-  // 16:00–21:00 extra-activity rows, one column block per weekday, for the given
-  // kid(s). withFill colours each kid's column with their soft theme colour.
+  // один лист: общая временная сетка (уроки и доп.занятия вместе), колонки — дни недели
+  // (и дети внутри дня для общего листа). withFill красит колонку каждого ребёнка его цветом.
   function buildScheduleSheet(wb, sheetName, days, kidsToShow, withFill){
     const ws = wb.addWorksheet(sheetName, {
       pageSetup: {orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:1, paperSize:9, margins:{left:0.3,right:0.3,top:0.3,bottom:0.3,header:0,footer:0}}
@@ -3483,37 +3374,107 @@
     const colsPerDay = kidsToShow.length;
     const totalCols = 1 + 7*colsPerDay;
     ws.getColumn(1).width = 13;
-    for(let c=2;c<=totalCols;c++) ws.getColumn(c).width = colsPerDay>1 ? 13 : 15;
+    for(let c=2;c<=totalCols;c++) ws.getColumn(c).width = colsPerDay>1 ? 14 : 18;
 
     let headerRows;
     if(colsPerDay>1){
       ws.mergeCells(1,1,2,1);
       days.forEach((d,dayIdx)=>{
-        const c0 = 2+dayIdx*2;
-        ws.mergeCells(1,c0,1,c0+1);
-        ws.getCell(1,c0).value = DOW_FULL[d.weekday];
+        const c0 = 2+dayIdx*colsPerDay;
+        ws.mergeCells(1,c0,1,c0+colsPerDay-1);
+        ws.getCell(1,c0).value = DOW_FULL[d.weekday]+' '+d.label;
         kidsToShow.forEach((k,kIdx)=>{ ws.getCell(2,c0+kIdx).value = KIDS.find(x=>x.id===k).name; });
       });
       headerRows = 2;
     } else {
-      days.forEach((d,dayIdx)=>{ ws.getCell(1,2+dayIdx).value = DOW_FULL[d.weekday]; });
+      days.forEach((d,dayIdx)=>{ ws.getCell(1,2+dayIdx).value = DOW_FULL[d.weekday]+' '+d.label; });
       headerRows = 1;
     }
 
-    let nextRow = headerRows+1;
-    nextRow = writePeriodRows(ws, nextRow, days, kidsToShow, colsPerDay);
-    const gapRow = nextRow; nextRow++; // left completely blank as a visual spacer
-    ws.getRow(gapRow).height = 6;
-    nextRow = writeExtraSection(ws, nextRow, days, kidsToShow, colsPerDay);
-    const lastRow = nextRow-1;
+    // занятия по колонкам
+    const clusters = {}, allCl = [];
+    days.forEach((d,dayIdx)=>{
+      clusters[dayIdx] = {};
+      kidsToShow.forEach(k=>{
+        const cl = clusterEvents(scheduleEventsForDay(k, d.date));
+        clusters[dayIdx][k] = cl;
+        cl.forEach(c=>allCl.push(c));
+      });
+    });
 
-    for(let r=1;r<=lastRow;r++){
-      if(r===gapRow) continue;
+    // строки сетки: номера уроков (без перемен) + время до/после уроков только там, где есть занятия
+    const overlap = (c,r)=> c.s<r.e && c.e>r.s;
+    const rows = [];
+    LESSON_TIMES.forEach(p=>{
+      const r = {s:toMin(p.start), e:toMin(p.end), label:p.n+' урок\n'+p.start+' - '+p.end, slot:true};
+      if(allCl.some(c=>overlap(c,r))) rows.push(r);
+    });
+    const dayStart = toMin(LESSON_TIMES[0].start);
+    // после последнего занятого урока — ровные часовые строки (как в расписании: 16:00-17:00, 17:00-18:00 …);
+    // до начала уроков — тоже часовые. Показываются только часы, в которые что-то есть.
+    const lastSlotEnd = rows.length ? Math.max(...rows.map(r=>r.e)) : dayStart;
+    const hourStart = Math.ceil(lastSlotEnd/60)*60;
+    for(let h=0; h<24; h++){
+      const r = {s:h*60, e:h*60+60, label:fmtMin(h*60)+' - '+fmtMin(h*60+60)};
+      if((r.s>=hourStart || r.e<=dayStart) && allCl.some(c=>overlap(c,r))) rows.push(r);
+    }
+    // занятие целиком в перемене между уроками — даём ему собственную строку
+    allCl.forEach(c=>{
+      if(!rows.some(r=>overlap(c,r))) rows.push({s:c.s, e:c.e, label:fmtMin(c.s)+' - '+fmtMin(c.e)});
+    });
+    rows.sort((x,y)=>x.s-y.s||x.e-y.e);
+    const first = headerRows+1;
+    const rowFrom = c => rows.findIndex(r=>overlap(c,r));
+    const rowTo = c => { let t=-1; rows.forEach((r,i)=>{ if(overlap(c,r)) t=i; }); return t; };
+
+    // два занятия одного ребёнка, попавшие в одну строку сетки (например 15:00–16:30 и 16:30–18:00
+    // в строке 16:00–17:00), сливаем в одну ячейку, иначе ячейки пересекутся
+    allCl.length = 0;
+    days.forEach((d,dayIdx)=> kidsToShow.forEach(k=>{
+      const list = clusters[dayIdx][k].map(c=>({i1:rowFrom(c), i2:rowTo(c), items:c.items.slice()})).sort((x,y)=>x.i1-y.i1);
+      const merged = [];
+      list.forEach(x=>{
+        const last = merged[merged.length-1];
+        if(last && x.i1<=last.i2){ last.i2 = Math.max(last.i2,x.i2); last.items.push(...x.items); }
+        else merged.push(x);
+      });
+      clusters[dayIdx][k] = merged.map(m=>{
+        m.items.sort((a,b)=>a.s-b.s||a.e-b.e);
+        return {i1:m.i1, i2:m.i2, items:m.items, text:clusterText(m.items)};
+      });
+      clusters[dayIdx][k].forEach(c=>allCl.push(c));
+    }));
+    const heights = rows.map(r=>{
+      return r.slot ? 26 : Math.min(42, Math.max(14, Math.round((r.e-r.s)*0.6)));
+    });
+    // достаточно высоты для текста ячейки
+    allCl.forEach(c=>{
+      const i1 = c.i1, i2 = c.i2;
+      let total = 0; for(let i=i1;i<=i2;i++) total += heights[i];
+      const need = c.text.split('\n').length*12+2;
+      if(total<need) heights[i1] += need-total;
+    });
+    rows.forEach((r,i)=>{ ws.getCell(first+i,1).value = r.label; ws.getRow(first+i).height = heights[i]; });
+
+    // сами занятия
+    days.forEach((d,dayIdx)=>{
+      kidsToShow.forEach((k,kIdx)=>{
+        const col = 2+dayIdx*colsPerDay+kIdx;
+        clusters[dayIdx][k].forEach(c=>{
+          const r1 = first+c.i1, r2 = first+c.i2;
+          ws.getCell(r1,col).value = c.text;
+          if(r2>r1) ws.mergeCells(r1,col,r2,col);
+        });
+      });
+    });
+
+    const lastRow = first+rows.length-1;
+    for(let r=1;r<=Math.max(lastRow,headerRows);r++){
       for(let c=1;c<=totalCols;c++){
         const cell = ws.getCell(r,c);
         cell.border = {top:{style:'thin'},left:{style:'thin'},bottom:{style:'thin'},right:{style:'thin'}};
         cell.alignment = {vertical:'middle', horizontal:'center', wrapText:true};
-        if(r<=headerRows) cell.font = {bold:true};
+        cell.font = r<=headerRows ? {bold:true} : {size: c===1?8:9};
       }
     }
     if(withFill){
@@ -3521,14 +3482,11 @@
         kidsToShow.forEach((k,kIdx)=>{
           const col = 2+dayIdx*colsPerDay+kIdx;
           const argb = hexToARGB(KIDS.find(x=>x.id===k).soft);
-          for(let r=2;r<=lastRow;r++){
-            if(r===gapRow) continue;
-            ws.getCell(r,col).fill = {type:'pattern', pattern:'solid', fgColor:{argb}};
-          }
+          for(let r=2;r<=lastRow;r++) ws.getCell(r,col).fill = {type:'pattern', pattern:'solid', fgColor:{argb}};
         });
       }
     }
-    ws.views = [{state:'frozen', ySplit: headerRows}];
+    ws.views = [{state:'frozen', xSplit:1, ySplit: headerRows}];
   }
 
   async function exportScheduleExcel(){
@@ -3536,16 +3494,30 @@
       alert('Не удалось загрузить библиотеку для Excel — проверьте подключение к интернету и попробуйте ещё раз.');
       return;
     }
-    const mon = mondayOf(state.date);
-    const days = [0,1,2,3,4,5,6].map(i=>{ const d=addDays(mon,i); return {date: iso(d), weekday: d.getDay()}; });
+    const mon = mondayOf(startOfDay(new Date())); // всегда текущая неделя (пн–вс)
+    const days = [0,1,2,3,4,5,6].map(i=>{ const d=addDays(mon,i); return {date: iso(d), weekday: d.getDay(), label: pad2(d.getDate())+'.'+pad2(d.getMonth()+1)}; });
+    const kids = KIDS.filter(k=>k.id!=='me'); // колонка «Я» в выгрузку не попадает
     const wb = new ExcelJS.Workbook();
-    buildScheduleSheet(wb, 'Расписание', days, KIDS.map(k=>k.id), true);
-    KIDS.forEach(k=>buildScheduleSheet(wb, k.name.slice(0,31), days, [k.id], false));
-    const buf = await wb.xlsx.writeBuffer();
+    let buf;
+    try{
+      const used = new Set(['общее расписание']);
+      const sheetName = (n)=>{
+        let base = String(n||'Ребёнок').replace(/[\\/?*\[\]:]/g,' ').trim().slice(0,28) || 'Ребёнок', nm = base, i = 2;
+        while(used.has(nm.toLowerCase())) nm = base+' '+(i++);
+        used.add(nm.toLowerCase()); return nm;
+      };
+      buildScheduleSheet(wb, 'Общее расписание', days, kids.map(k=>k.id), true);
+      kids.forEach(k=>buildScheduleSheet(wb, sheetName(k.name), days, [k.id], false));
+      buf = await wb.xlsx.writeBuffer();
+    } catch(err){
+      console.error('Excel export failed', err);
+      alert('Не удалось сформировать Excel: '+(err && err.message ? err.message : err));
+      return;
+    }
     const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'Расписание.xlsx';
+    a.href = url; a.download = 'Расписание '+days[0].label+'-'+days[6].label+'.xlsx';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url), 5000);
   }

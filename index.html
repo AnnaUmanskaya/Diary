@@ -632,6 +632,7 @@
   let customLessonsData = []; // {id, kid, date, start, end, subject}
   let calendarsData = []; // {id, name, color, hidden}
   let calRulesData = []; // {id, calendarId, subject, date, start, end, repeat:'none'|'daily'|'weekly'|'weekdays', weekdays:[0-6], until}
+  let showArchivedRules = false; // show lessons whose end date is earlier than the calendar default end date
   let calSelectedId = null; // which calendar is expanded in settings tab
   let calRuleEditId = null; // rule currently being edited in settings tab
   let gradesData = {}; // gradesData[kid][subject][trimester] = [{id,value,weight}]
@@ -878,6 +879,13 @@
     if(rule.repeat==='weekdays') return 'по дням: '+(rule.weekdays||[]).slice().sort().map(d=>DOW[d]).join(', ');
     return '';
   }
+  // Архив: урок с окончанием раньше «окончания по умолчанию» календаря, либо разовый урок с прошедшей датой
+  function ruleIsArchived(cal, r){
+    if(!r) return false;
+    if(cal && cal.defaultUntil && r.until && r.until < cal.defaultUntil) return true;
+    if(r.repeat==='none' && r.date && r.date < iso(startOfDay(new Date()))) return true;
+    return false;
+  }
   function untilLabel(rule){
     return rule.until ? ('до '+fmtDate(rule.until)) : 'бессрочно';
   }
@@ -928,6 +936,15 @@
   }
   function gradesFor(kid,subject,tri){
     return (((gradesData[kid]||{})[subject]||{})[tri]) || [];
+  }
+  // Оценки в порядке даты получения (а не внесения); без даты — в конец, в порядке внесения
+  function gradesSortedByDate(list){
+    return list.map((g,i)=>({g,i})).sort((a,b)=>{
+      const da=a.g.date||'', db=b.g.date||'';
+      if(da && !db) return -1;
+      if(!da && db) return 1;
+      return da.localeCompare(db) || (a.g.start||'').localeCompare(b.g.start||'') || (a.i-b.i);
+    }).map(x=>x.g);
   }
   function ensureGradesSlot(kid,subject,tri){
     if(!gradesData[kid]) gradesData[kid] = {};
@@ -1934,7 +1951,13 @@
   }
 
   function renderCalRulesEditor(cal){
-    const rules = calRulesData.filter(r=>r.calendarId===cal.id).sort((a,b)=>a.date.localeCompare(b.date)||a.start.localeCompare(b.start));
+    // сортировка: день недели (пн→вс), затем время начала, затем дата
+    const wdKey = r=>{
+      const order = [1,2,3,4,5,6,0];
+      let days = (r.repeat==='weekdays' && r.weekdays && r.weekdays.length) ? r.weekdays.slice() : [new Date(r.date+'T00:00:00').getDay()];
+      return Math.min(...days.map(d=>{ const i=order.indexOf(Number(d)); return i<0?99:i; }));
+    };
+    const rules = calRulesData.filter(r=>r.calendarId===cal.id).sort((a,b)=>wdKey(a)-wdKey(b)||a.start.localeCompare(b.start)||a.date.localeCompare(b.date));
     const editRule = calRuleEditId ? rules.find(r=>r.id===calRuleEditId) : null;
     const repeat = editRule ? editRule.repeat : 'weekly';
     const wd = editRule && editRule.weekdays ? editRule.weekdays : [];
@@ -1978,9 +2001,23 @@
     </div>
 `;
 
-    if(rules.length===0){
+    // Архив: уроки с датой окончания раньше, чем «Окончание периодичности по умолчанию» календаря
+    const isArchivedRule = r => ruleIsArchived(cal, r);
+    const archivedCount = rules.filter(isArchivedRule).length;
+    const allRules = rules;
+    const visibleRules = showArchivedRules ? allRules : allRules.filter(r=>!isArchivedRule(r));
+    if(archivedCount>0){
+      out += `<div class="bulk-bar" style="margin-bottom:8px;">
+        <span style="font-size:12.5px;color:var(--ink-soft);">📦 В архиве (${cal.defaultUntil?'окончание раньше '+fmtDate(cal.defaultUntil)+', ':''}разовые уроки с прошедшей датой): <b>${archivedCount}</b></span>
+        <button class="btn secondary" id="cr-archtoggle">${showArchivedRules?'Скрыть архив':'Показать архив'}</button>
+      </div>`;
+    }
+    if(allRules.length===0){
       out += `<div class="empty-state">Уроков в этом календаре пока нет.</div>`;
+    } else if(visibleRules.length===0){
+      out += `<div class="empty-state">Все уроки этого календаря в архиве. Нажмите «Показать архив».</div>`;
     } else {
+      const rules = visibleRules;
       const overlapping = overlappingRuleIdsForCalendar(calSelectedId);
       if(overlapping.size>0){
         out += `<div class="overlap-warning">⚠ Найдены уроки, которые накладываются друг на друга (одна и та же дата и время сразу у двух записей) — они помечены ниже красным. Из-за этого урок в расписании и домашнее задание к нему могут задваиваться. Обычно нужно удалить один из них или указать «Окончание периодичности» одному из них, чтобы они не пересекались.</div>`;
@@ -1998,11 +2035,12 @@
       </div>`;
       out += `<div class="reminder-list">${rules.map(r=>{
         const isOverlapping = overlapping.has(r.id);
+        const isArch = isArchivedRule(r);
         return `
-        <div class="reminder-item ${isOverlapping?'rule-overlap':''}">
+        <div class="reminder-item ${isOverlapping?'rule-overlap':''}" ${isArch?'style="opacity:.6;"':''}>
           <input type="checkbox" class="cr-select" data-ruleselect="${r.id}" ${selectedRuleIds.has(r.id)?'checked':''}>
           <div class="reminder-date">${fmtDate(r.date)}</div>
-          <div class="rtext">${isOverlapping?'<span title="Пересекается с другим уроком">⚠</span> ':''}<b>${escapeHtml(r.subject)}</b> · ${ruleTimeLabel(r)} · ${repeatLabel(r)} · ${untilLabel(r)}</div>
+          <div class="rtext">${isOverlapping?'<span title="Пересекается с другим уроком">⚠</span> ':''}${isArch?'<span title="В архиве">📦</span> ':''}<b>${escapeHtml(r.subject)}</b> · ${ruleTimeLabel(r)} · ${repeatLabel(r)} · ${untilLabel(r)}</div>
           <button class="btn secondary" data-credit="${r.id}">Изменить</button>
           <button class="rdel" data-crdel="${r.id}">✕</button>
         </div>`;
@@ -2038,7 +2076,7 @@
       out += `<div class="table-scroll"><table class="grades-table"><thead><tr>
         <th>Предмет</th><th>Оценки</th><th>Средний балл</th><th>Нужно 5</th><th></th>
       </tr></thead><tbody>${subjects.map(subject=>{
-        const list = gradesFor(gradesKid, subject, gradesTri);
+        const list = gradesSortedByDate(gradesFor(gradesKid, subject, gradesTri));
         const stats = trimesterStats(gradesKid, subject, gradesTri);
         const es = encSubj(subject);
         let needHtml;
@@ -3699,6 +3737,7 @@
     app.querySelectorAll('[data-calselect]').forEach(el=>el.onclick=()=>{
       const id = el.dataset.calselect;
       calSelectedId = (calSelectedId===id) ? null : id;
+      showArchivedRules = false;
       calRuleEditId = null;
       selectedRuleIds = new Set();
       render();
@@ -3771,9 +3810,12 @@
       if(el.checked) selectedRuleIds.add(id); else selectedRuleIds.delete(id);
       render();
     });
+    const crArchToggle = document.getElementById('cr-archtoggle');
+    if(crArchToggle) crArchToggle.onclick = ()=>{ showArchivedRules = !showArchivedRules; render(); };
     const crSelectAll = document.getElementById('cr-selectall');
     if(crSelectAll) crSelectAll.onchange = ()=>{
-      const rules = calRulesData.filter(r=>r.calendarId===calSelectedId);
+      const calObj = calendarsData.find(c=>c.id===calSelectedId);
+      const rules = calRulesData.filter(r=>r.calendarId===calSelectedId && (showArchivedRules || !ruleIsArchived(calObj, r)));
       if(crSelectAll.checked) rules.forEach(r=>selectedRuleIds.add(r.id));
       else rules.forEach(r=>selectedRuleIds.delete(r.id));
       render();

@@ -576,6 +576,17 @@
   .side{width:244px;flex-basis:244px;} .main{padding:30px 28px 60px;}
   .ro [data-addlesson],.ro [data-gradeadd],.ro [data-gradedel],.ro [data-subjdel],.ro [data-subjrestore],.ro #grades-clear,.ro .reminder-form,.ro .rdel{display:none !important;}
   .ro [data-hworphandel]{display:none !important;}
+  .ro [data-trimapply],.ro #trim-fix-all,.ro .tri-box{display:none !important;}
+  .tri-box{margin:0 0 14px;font-size:13px;}
+  .tri-box summary{cursor:pointer;color:var(--ink-soft);}
+  .tri-box .tri-row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .tri-box .tri-row label{display:flex;align-items:center;gap:6px;}
+  .gt-final{white-space:nowrap;}
+  .gt-final select{padding:3px 6px;border-radius:8px;border:1px solid var(--line,#ccc);background:transparent;color:inherit;font:inherit;}
+  .gt-final .gt-sugg{margin-left:6px;font-size:12px;padding:2px 7px;cursor:pointer;}
+  .tri-sum small{color:var(--ink-soft);margin-left:6px;}
+  .gt-nofin{display:block;font-size:11.5px;color:var(--ink-soft);margin-top:3px;cursor:pointer;}
+  .tri-cur{font-size:11px;color:var(--ink-soft);}
   .ro:not(.canmark) [data-hwtoggle],.ro:not(.canmark) [data-hwtoggle-cal]{pointer-events:none;}
   .ro .warn-banner{display:none;}
   .cal-row a{color:var(--navy);text-decoration:none;}
@@ -644,6 +655,9 @@
   let docDraft = {files:[]}; // staged files for the "add document" form
   let linksData = []; // {id,title,url,note,createdAt}
   let excludedSubjectsData = {petya:[], fedya:[]}; // subjects hidden from grading per kid
+  let trimSettingsData = {s2:'12-01', s3:'03-01'}; // начало 2-го и 3-го триместра (месяц-день); 1-й триместр — с 1 сентября
+  let trimNoFinalData = {}; // trimNoFinalData[kid] = [предметы, по которым итоговая за триместр не выставляется]
+  let trimFinalsData = {}; // trimFinalsData[kid][subject][tri] = итоговая оценка за триместр (1..5)
   let fileLibraryData = []; // persistent registry of every uploaded homework file, independent of which homework entry currently references it
   let selectedRuleIds = new Set(); // multi-selected calendar rule ids in "Настройка расписания" for bulk edits
   let storageReady = false;
@@ -955,14 +969,50 @@
   // ---- grade helpers ----
   // A grade is {id, value, value2?, weight, date?, start?, src?}. "5/4" is stored as
   // value=5, value2=4 and counts as TWO grades, each with the grade's weight.
-  const TRI2_START_MONTH = 12; // 2-й триместр: с 1 декабря
-  const TRI3_START_MONTH = 3;  // 3-й триместр: с 1 марта
+  const TRI_DEFAULTS = {s2:'12-01', s3:'03-01'};
+  // порядковый номер дня внутри учебного года: сентябрь..декабрь идут первыми, затем январь..август
+  function triOrd(m,d){ const k = m*100+d; return k>=901 ? k : k+1300; }
+  function triBounds(){
+    const p = (s,def)=>{ const x = /^(\d{1,2})-(\d{1,2})$/.exec(s||'') || /^(\d{1,2})-(\d{1,2})$/.exec(def); return triOrd(+x[1],+x[2]); };
+    let o2 = p(trimSettingsData.s2, TRI_DEFAULTS.s2), o3 = p(trimSettingsData.s3, TRI_DEFAULTS.s3);
+    if(!(o2>901 && o3>o2)){ o2 = p(TRI_DEFAULTS.s2); o3 = p(TRI_DEFAULTS.s3); }
+    return {o2,o3};
+  }
   function triOfDate(dateStr){
-    const m = parseInt((dateStr||'').slice(5,7),10);
+    const m = parseInt((dateStr||'').slice(5,7),10), d = parseInt((dateStr||'').slice(8,10),10) || 1;
     if(!m) return 1;
-    if(m>=9 && m<TRI2_START_MONTH) return 1;
-    if(m>=TRI2_START_MONTH || m<TRI3_START_MONTH) return 2;
-    return 3;
+    const o = triOrd(m,d), b = triBounds();
+    return o<b.o2 ? 1 : (o<b.o3 ? 2 : 3);
+  }
+  function todayTri(){ return triOfDate(iso(startOfDay(new Date()))); }
+  // итоговые оценки за триместр (ставятся отдельно от текущих оценок)
+  function trimFinalFor(kid,subject,tri){
+    const v = ((trimFinalsData[kid]||{})[subject]||{})[tri];
+    return (v===undefined || v===null || v==='') ? null : Number(v);
+  }
+  function setTrimFinal(kid,subject,tri,val){
+    if(val===null){
+      if(trimFinalsData[kid] && trimFinalsData[kid][subject]) delete trimFinalsData[kid][subject][tri];
+      return;
+    }
+    if(!trimFinalsData[kid]) trimFinalsData[kid] = {};
+    if(!trimFinalsData[kid][subject]) trimFinalsData[kid][subject] = {};
+    trimFinalsData[kid][subject][tri] = val;
+  }
+  // по правилу школы: 4,5 округляется до 4, строго больше 4,5 — до 5
+  function suggestedFinal(avg){
+    if(avg===null || avg===undefined) return null;
+    return Math.min(5, Math.max(1, Math.ceil(avg-0.5-1e-9)));
+  }
+  function isNoFinal(kid,subject){ return ((trimNoFinalData[kid])||[]).includes(subject); }
+  function setNoFinal(kid,subject,on){
+    const list = trimNoFinalData[kid] = (trimNoFinalData[kid]||[]).filter(x=>x!==subject);
+    if(on) list.push(subject);
+  }
+  function triInputValue(mmdd){
+    const m = /^(\d{2})-(\d{2})$/.exec(mmdd||''); if(!m) return '';
+    const now = new Date(), sy = now.getMonth()>=8 ? now.getFullYear() : now.getFullYear()-1;
+    return ((+m[1])>=9 ? sy : sy+1)+'-'+m[1]+'-'+m[2];
   }
   function parseGradeInput(str){
     const m = String(str||'').trim().match(/^([1-5](?:[.,]\d+)?)\s*(?:[\/\\]\s*([1-5](?:[.,]\d+)?))?$/);
@@ -1024,6 +1074,8 @@
     calRulesData = p.calRules || []; gradesData = p.grades || {}; documentsData = p.documents || [];
     linksData = p.links || []; excludedSubjectsData = p.excludedSubjects || {}; fileLibraryData = p.fileLibrary || [];
     childrenData = p.children || []; groupsData = p.groups || [];
+    trimSettingsData = Object.assign({}, TRI_DEFAULTS, p.trimSettings || {}); trimFinalsData = p.trimFinals || {}; trimNoFinalData = p.trimNoFinal || {};
+    gradesTri = todayTri();
     if(!p.children && !p.groups && (calendarsData.length || Object.keys(homeworkData).length)){ // data from the old two-kid version
       childrenData = [{id:'petya',name:'Петя',hex:'#5b6fc7'},{id:'fedya',name:'Федя',hex:'#c99a00'}];
       groupsData = [{id:'g-kids',kind:'kids',name:'Учебный (дети)'}];
@@ -1098,7 +1150,10 @@
       excludedSubjects: excludedSubjectsData,
       fileLibrary: fileLibraryData,
       children: childrenData,
-      groups: groupsData
+      groups: groupsData,
+      trimSettings: trimSettingsData,
+      trimFinals: trimFinalsData,
+      trimNoFinal: trimNoFinalData
     };
 
     try {
@@ -1203,7 +1258,8 @@
       overrides:only(overridesData,k=>k.startsWith(id+'|')),
       homework:only(homeworkData,k=>k.startsWith(id+'|') || ids.some(i=>k.startsWith('cal|'+i+'|'))),
       fileLibrary:fileLibraryData.filter(f=>mine(f.kid)),
-      grades:{[id]:gradesData[id]||{}}, excludedSubjects:{[id]:excludedSubjectsData[id]||[]}
+      grades:{[id]:gradesData[id]||{}}, excludedSubjects:{[id]:excludedSubjectsData[id]||[]},
+      trimSettings:trimSettingsData, trimFinals:{[id]:trimFinalsData[id]||{}}, trimNoFinal:{[id]:trimNoFinalData[id]||[]}
     };
   }
   async function syncShares(){
@@ -2053,17 +2109,46 @@
   function encSubj(s){ return encodeURIComponent(s); }
   function decSubj(s){ return decodeURIComponent(s); }
 
+  function triSettingsHtml(){
+    const b2 = triInputValue(trimSettingsData.s2), b3 = triInputValue(trimSettingsData.s3);
+    return `<details class="tri-box"><summary>Даты триместров</summary>
+      <div class="tri-row">
+        <span>1-й триместр: с 1 сентября</span>
+        <label>2-й триместр с <input type="date" data-trimdate="s2" value="${b2}"></label>
+        <label>3-й триместр с <input type="date" data-trimdate="s3" value="${b3}"></label>
+      </div>
+      <div style="margin-top:6px;color:var(--ink-soft);">В день начала нового триместра вкладка «Оценки» сама открывается на нём и выглядит пустой. Оценки прошлых триместров никуда не деваются: они остаются на кнопках «1-й», «2-й», «3-й триместр».</div>
+    </details>`;
+  }
+  function triSummaryHtml(subjects){
+    const kidObj = KIDS.find(k=>k.id===gradesKid);
+    const cell = (sj,t)=>{
+      const fin = trimFinalFor(gradesKid, sj, t), st = trimesterStats(gradesKid, sj, t);
+      const avg = st.avg===null ? '' : `<small>ср. ${st.avg.toFixed(2).replace('.',',')}</small>`;
+      if(isNoFinal(gradesKid, sj)) return `<span style="color:var(--ink-soft);">не выставляется</span>`;
+      if(fin!==null) return `<b>${fin}</b>${avg}`;
+      return st.avg===null ? '—' : `<span style="color:var(--ink-soft);">—</span>${avg}`;
+    };
+    return `<div class="section-title" style="margin-top:22px;">Итоговые оценки по триместрам${kidObj?' — '+escapeHtml(kidObj.name):''}</div>
+      <div style="margin:4px 0 8px;"><button class="btn secondary" id="trim-fix-all">Выставить итоговые по среднему (${gradesTri}-й триместр)</button></div>
+      <div class="table-scroll"><table class="grades-table tri-sum"><thead><tr><th>Предмет</th><th>1-й триместр</th><th>2-й триместр</th><th>3-й триместр</th></tr></thead><tbody>
+      ${subjects.map(sj=>`<tr><td class="gt-subject">${escapeHtml(sj)}</td>${[1,2,3].map(t=>`<td>${cell(sj,t)}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>`;
+  }
+
   function renderGradesTab(){
     const allSubjects = subjectsForKid(gradesKid);
     const excluded = excludedSubjectsData[gradesKid] || [];
     const subjects = allSubjects.filter(s=>!excluded.includes(s));
+    const curTri = todayTri();
     let out = `<div class="grades-toolbar">
       <div class="seg">${KIDS.filter(k=>k.id!=='me').map(k=>`<button data-gradekid="${k.id}" class="${gradesKid===k.id?'active':''}">${k.name}</button>`).join('')}</div>
-      <div class="seg">${[1,2,3].map(t=>`<button data-gradetri="${t}" class="${gradesTri===t?'active':''}">${t}-й триместр</button>`).join('')}</div>
+      <div class="seg">${[1,2,3].map(t=>`<button data-gradetri="${t}" class="${gradesTri===t?'active':''}" ${t===curTri?'title="Текущий триместр"':''}>${t}-й триместр${t===curTri?' •':''}</button>`).join('')}</div>
       <span class="spacer"></span>
       ${(()=>{ let n=0; subjects.forEach(sj=>{ n += gradesFor(gradesKid, sj, gradesTri).length; }); return n>0 ? `<button class="btn secondary" id="grades-clear" style="color:var(--warn);border-color:var(--warn);">Удалить все оценки (${n})</button>` : ''; })()}
     </div>
 `;
+    out += triSettingsHtml();
 
     if(subjects.length===0 && excluded.length===0){
       out += `<div class="empty-state">Предметов не найдено. Оценки собираются только из календарей «Лицей_Имя» — добавьте туда уроки на вкладке «Настройка расписания».</div>`;
@@ -2074,11 +2159,12 @@
       out += `<div class="empty-state">Все предметы убраны из оценивания. Верните нужные ниже.</div>`;
     } else {
       out += `<div class="table-scroll"><table class="grades-table"><thead><tr>
-        <th>Предмет</th><th>Оценки</th><th>Средний балл</th><th>Нужно 5</th><th></th>
+        <th>Предмет</th><th>Оценки</th><th>Средний балл</th><th>Нужно 5</th><th>Итог за триместр</th><th></th>
       </tr></thead><tbody>${subjects.map(subject=>{
         const list = gradesSortedByDate(gradesFor(gradesKid, subject, gradesTri));
         const stats = trimesterStats(gradesKid, subject, gradesTri);
         const es = encSubj(subject);
+        const fin = trimFinalFor(gradesKid, subject, gradesTri), sug = suggestedFinal(stats.avg), noFin = isNoFinal(gradesKid, subject);
         let needHtml;
         if(stats.avg===null){
           needHtml = `<span class="gs-need none">—</span>`;
@@ -2102,9 +2188,11 @@
         </div></td>
         <td class="gt-avg"><b>${stats.avg===null?'—':stats.avg.toFixed(2)}</b></td>
         <td class="gt-need">${needHtml}</td>
+        <td class="gt-final">${noFin?`<span style="color:var(--ink-soft);">не выставляется</span>`:`<select data-trimfinal="${gradesKid}|${es}|${gradesTri}" title="Итоговая оценка за ${gradesTri}-й триместр" ${viewerMode?'disabled':''}><option value="">—</option>${[5,4,3,2,1].map(v=>`<option value="${v}" ${fin===v?'selected':''}>${v}</option>`).join('')}</select>${(sug!==null && fin!==sug)?`<button type="button" class="btn secondary gt-sugg" data-trimapply="${gradesKid}|${es}|${gradesTri}" title="Выставить итоговую по среднему баллу">по ср.: ${sug}</button>`:''}`}<label class="gt-nofin" title="По этому предмету триместровая оценка не выставляется"><input type="checkbox" data-trimnofinal="${gradesKid}|${es}" ${noFin?'checked':''} ${viewerMode?'disabled':''}> без итоговой</label></td>
         <td><button class="gt-subdel" data-subjdel="${gradesKid}|${es}" title="Убрать предмет из оценивания">🗑</button></td>
       </tr>`;
       }).join('')}</tbody></table></div>`;
+      out += triSummaryHtml(subjects);
     }
 
     if(excluded.length>0){
@@ -3581,7 +3669,7 @@
 
   // ---------- event handling ----------
   function attachHandlers(){
-    app.querySelectorAll('[data-tab]').forEach(el=>el.onclick=()=>{state.tab=el.dataset.tab; render();});
+    app.querySelectorAll('[data-tab]').forEach(el=>el.onclick=()=>{state.tab=el.dataset.tab; if(state.tab==='grades') gradesTri = todayTri(); render();});
     app.querySelectorAll('[data-view]').forEach(el=>el.onclick=()=>{state.view=el.dataset.view; render();});
     app.querySelectorAll('[data-nav]').forEach(el=>el.onclick=()=>{
       const dir = el.dataset.nav;
@@ -3987,6 +4075,47 @@
     // ---- grades tab handlers ----
     app.querySelectorAll('[data-gradekid]').forEach(el=>el.onclick=()=>{ gradesKid = el.dataset.gradekid; render(); });
     app.querySelectorAll('[data-gradetri]').forEach(el=>el.onclick=()=>{ gradesTri = parseInt(el.dataset.gradetri,10); render(); });
+
+    app.querySelectorAll('[data-trimfinal]').forEach(el=>el.onchange=async ()=>{
+      const [kid, es, triStr] = el.dataset.trimfinal.split('|');
+      setTrimFinal(kid, decSubj(es), parseInt(triStr,10), el.value==='' ? null : Number(el.value));
+      await persistAll(); render();
+    });
+    app.querySelectorAll('[data-trimnofinal]').forEach(el=>el.onchange=async ()=>{
+      const [kid, es] = el.dataset.trimnofinal.split('|');
+      setNoFinal(kid, decSubj(es), el.checked);
+      await persistAll(); render();
+    });
+    app.querySelectorAll('[data-trimapply]').forEach(el=>el.onclick=async ()=>{
+      const [kid, es, triStr] = el.dataset.trimapply.split('|');
+      const subject = decSubj(es), tri = parseInt(triStr,10);
+      const sug = suggestedFinal(trimesterStats(kid, subject, tri).avg);
+      if(sug===null) return;
+      setTrimFinal(kid, subject, tri, sug);
+      await persistAll(); render();
+    });
+    const trimFixAll = document.getElementById('trim-fix-all');
+    if(trimFixAll) trimFixAll.onclick = async ()=>{
+      const excluded = excludedSubjectsData[gradesKid] || [];
+      let n = 0;
+      subjectsForKid(gradesKid).filter(x=>!excluded.includes(x)).forEach(sj=>{
+        if(isNoFinal(gradesKid, sj) || trimFinalFor(gradesKid, sj, gradesTri)!==null) return;
+        const sug = suggestedFinal(trimesterStats(gradesKid, sj, gradesTri).avg);
+        if(sug!==null){ setTrimFinal(gradesKid, sj, gradesTri, sug); n++; }
+      });
+      if(!n){ alert('Нечего выставлять: у всех предметов с оценками итоговая уже стоит.'); return; }
+      await persistAll(); render();
+    };
+    app.querySelectorAll('[data-trimdate]').forEach(el=>el.onchange=async ()=>{
+      const key = el.dataset.trimdate, v = el.value;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){ render(); return; }
+      const next = Object.assign({}, trimSettingsData, {[key]: v.slice(5)});
+      const o2 = triOrd(+next.s2.slice(0,2), +next.s2.slice(3,5)), o3 = triOrd(+next.s3.slice(0,2), +next.s3.slice(3,5));
+      if(!(o2>901 && o3>o2)){ alert('Даты должны идти по порядку: 2-й триместр начинается после 1 сентября, 3-й — позже 2-го.'); render(); return; }
+      trimSettingsData = next;
+      gradesTri = todayTri();
+      await persistAll(); render();
+    });
     app.querySelectorAll('[data-gradeadd]').forEach(el=>el.onclick=async ()=>{
       const [kid, es, triStr] = el.dataset.gradeadd.split('|');
       const subject = decSubj(es);
